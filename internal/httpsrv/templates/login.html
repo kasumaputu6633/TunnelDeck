@@ -5,7 +5,7 @@
     <h1 class="text-xl font-semibold mb-1">Sign in</h1>
     <p class="text-sm text-slate-400 mb-4">TunnelDeck control plane</p>
 
-    {{if .Error}}<div class="mb-3 text-sm text-red-300">{{.Error}}</div>{{end}}
+    {{if .Data.Error}}<div class="mb-3 text-sm text-red-300">{{.Data.Error}}</div>{{end}}
 
     <form method="POST" action="/login" class="space-y-3">
         <div>
