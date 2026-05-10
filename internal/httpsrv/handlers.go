@@ -317,6 +317,72 @@ func defaultStr(s, fallback string) string {
 	return s
 }
 
+// nodeStatus is polled by the setup page's HTMX widget every few seconds.
+// Returns an HTML fragment (not a full page) with the node's current
+// handshake/online state so the user can verify the tunnel came up
+// without leaving the tutorial.
+func (s *Server) nodeStatus(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, "bad id", http.StatusBadRequest)
+		return
+	}
+	nodes, _ := s.Deps.DB.ListNodes(ctx)
+	var node db.Node
+	found := false
+	for _, n := range nodes {
+		if n.ID == id {
+			node = n
+			found = true
+			break
+		}
+	}
+	if !found {
+		http.Error(w, "node not found", http.StatusNotFound)
+		return
+	}
+
+	g, _ := s.Deps.DB.GetGateway(ctx)
+	peers := liveWGPeers(ctx, s, g.WGIf)
+
+	var matched *wg.Peer
+	for i := range peers {
+		if wg.FirstAllowedHost(peers[i]) == node.WGIP {
+			matched = &peers[i]
+			break
+		}
+	}
+
+	data := struct {
+		Node     db.Node
+		Peer     *wg.Peer
+		Online   bool
+		Handshake string
+	}{Node: node, Peer: matched}
+
+	if matched != nil {
+		cutoff := time.Now().Add(-2 * time.Minute).Unix()
+		data.Online = matched.LatestHandshakeUnix >= cutoff
+		if matched.LatestHandshakeUnix > 0 {
+			data.Handshake = formatHandshake(matched.LatestHandshakeUnix)
+		} else {
+			data.Handshake = "never"
+		}
+	}
+
+	// Render the small fragment template without the base layout.
+	t, ok := s.Templates["node_status"]
+	if !ok {
+		http.Error(w, "unknown fragment", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := t.ExecuteTemplate(w, "fragment", data); err != nil {
+		http.Error(w, "template error", http.StatusInternalServerError)
+	}
+}
+
 func (s *Server) deleteNode(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {

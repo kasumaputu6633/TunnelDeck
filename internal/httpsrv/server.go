@@ -76,6 +76,7 @@ func New(deps Deps) (*Server, error) {
 		gr.Get("/nodes", s.listNodes)
 		gr.Post("/nodes", s.createNode)
 		gr.Get("/nodes/{id}/setup", s.nodeSetup)
+		gr.Get("/nodes/{id}/status", s.nodeStatus)
 		gr.Post("/nodes/{id}/delete", s.deleteNode)
 
 		gr.Get("/forwards", s.listForwards)
@@ -122,13 +123,26 @@ func parseTemplates() (map[string]*template.Template, error) {
 	}
 	out := map[string]*template.Template{}
 	for _, e := range entries {
-		if e.IsDir() || e.Name() == "_base.html" || !strings.HasSuffix(e.Name(), ".html") {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".html") || e.Name() == "_base.html" {
 			continue
 		}
 		pageBytes, err := templatesFS.ReadFile("templates/" + e.Name())
 		if err != nil {
 			return nil, err
 		}
+		name := strings.TrimSuffix(e.Name(), ".html")
+
+		// Files starting with "_frag_" are HTMX fragments — no base layout.
+		// They're rendered directly via ExecuteTemplate(w, "fragment", data).
+		if strings.HasPrefix(e.Name(), "_frag_") {
+			t, err := template.New(e.Name()).Funcs(funcs).Parse(string(pageBytes))
+			if err != nil {
+				return nil, err
+			}
+			out[strings.TrimPrefix(name, "_frag_")] = t
+			continue
+		}
+
 		t, err := template.New(e.Name()).Funcs(funcs).Parse(string(baseBytes))
 		if err != nil {
 			return nil, err
@@ -136,7 +150,6 @@ func parseTemplates() (map[string]*template.Template, error) {
 		if _, err := t.Parse(string(pageBytes)); err != nil {
 			return nil, err
 		}
-		name := strings.TrimSuffix(e.Name(), ".html")
 		out[name] = t
 	}
 	return out, nil

@@ -1,0 +1,28 @@
+{{define "fragment"}}
+{{if .Online}}
+<div class="flex items-center gap-3 bg-emerald-950 border border-emerald-700 rounded p-3">
+    <div class="w-3 h-3 rounded-full bg-emerald-400 animate-pulse"></div>
+    <div class="flex-1">
+        <div class="text-sm font-semibold text-emerald-200">Online</div>
+        <div class="text-xs text-emerald-300/80">last handshake {{.Handshake}}</div>
+    </div>
+    <a href="/forwards" class="text-xs text-emerald-200 hover:text-white underline">add a forward →</a>
+</div>
+{{else if .Peer}}
+<div class="flex items-center gap-3 bg-amber-950 border border-amber-800 rounded p-3">
+    <div class="w-3 h-3 rounded-full bg-amber-400"></div>
+    <div class="flex-1">
+        <div class="text-sm font-semibold text-amber-200">Peer registered, waiting for handshake</div>
+        <div class="text-xs text-amber-300/80">last handshake {{.Handshake}} — run step 5 on the node to bring the tunnel up</div>
+    </div>
+</div>
+{{else}}
+<div class="flex items-center gap-3 bg-slate-900 border border-slate-700 rounded p-3">
+    <div class="w-3 h-3 rounded-full bg-slate-500"></div>
+    <div class="flex-1">
+        <div class="text-sm font-semibold text-slate-200">Not registered yet</div>
+        <div class="text-xs text-slate-400">the node's public key hasn't been added to the gateway (step 4)</div>
+    </div>
+</div>
+{{end}}
+{{end}}

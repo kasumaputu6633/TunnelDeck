@@ -6,61 +6,145 @@
 </div>
 
 <div class="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-4">
+    <p class="text-sm text-slate-200 mb-1">Follow these steps in order on the node. When you're done, the status widget below will flip to <span class="text-emerald-300">online</span> on its own.</p>
+    <p class="text-xs text-slate-400 mb-3">The private key never leaves the node — TunnelDeck only needs the public key.</p>
+
+    <div id="node-status"
+         hx-get="/nodes/{{.Data.Node.ID}}/status"
+         hx-trigger="load, every 5s"
+         hx-swap="innerHTML">
+        <div class="flex items-center gap-3 bg-slate-900 border border-slate-700 rounded p-3">
+            <div class="w-3 h-3 rounded-full bg-slate-500"></div>
+            <div class="text-sm text-slate-300">checking status…</div>
+        </div>
+    </div>
+</div>
+
+<div class="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-4">
+    <label class="block text-xs text-slate-400 mb-1">Select node OS</label>
+    <select id="os-select"
+            onchange="document.querySelectorAll('[data-os]').forEach(el=>{el.style.display=(el.dataset.os===this.value)?'':'none'});"
+            class="w-full max-w-xs bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm">
+        <option value="linux">Linux (Debian/Ubuntu/Arch/…)</option>
+        <option value="macos">macOS</option>
+        <option value="windows">Windows 10 / 11</option>
+    </select>
+    <p class="text-xs text-slate-500 mt-2">The config values below are identical across OSes; only the install + activate commands differ.</p>
+</div>
+
+<!-- ==================== LINUX ==================== -->
+<div data-os="linux">
+
+<div class="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-4">
     <h2 class="text-sm font-semibold mb-2">1. Install WireGuard on the node</h2>
-    <p class="text-xs text-slate-400 mb-2">Ubuntu/Debian:</p>
+    <p class="text-xs text-slate-400 mb-2">Debian / Ubuntu:</p>
     <pre class="text-xs bg-slate-950 border border-slate-700 rounded p-3 overflow-x-auto">sudo apt update
 sudo apt install -y wireguard wireguard-tools</pre>
 
-    <p class="text-xs text-slate-400 mt-3 mb-2">Arch/CachyOS:</p>
+    <p class="text-xs text-slate-400 mt-3 mb-2">Arch / CachyOS:</p>
     <pre class="text-xs bg-slate-950 border border-slate-700 rounded p-3 overflow-x-auto">sudo pacman -S --needed wireguard-tools</pre>
+
+    <p class="text-xs text-slate-400 mt-3 mb-2">Fedora / RHEL:</p>
+    <pre class="text-xs bg-slate-950 border border-slate-700 rounded p-3 overflow-x-auto">sudo dnf install -y wireguard-tools</pre>
 </div>
 
 <div class="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-4">
     <h2 class="text-sm font-semibold mb-2">2. Generate a keypair on the node</h2>
-    <p class="text-xs text-slate-400 mb-2">Run this on the node (the private key must never leave the node):</p>
     <pre class="text-xs bg-slate-950 border border-slate-700 rounded p-3 overflow-x-auto">wg genkey | sudo tee /etc/wireguard/node.key | wg pubkey | sudo tee /etc/wireguard/node.pub
 sudo chmod 600 /etc/wireguard/node.key</pre>
-    <p class="text-xs text-slate-400 mt-2">
-        Copy the <span class="font-mono">node.pub</span> value — you'll paste it into the
-        gateway's <span class="font-mono">wg0.conf</span> in step 4.
-    </p>
+    <p class="text-xs text-slate-400 mt-2">Copy the value printed from <span class="font-mono">node.pub</span> — you'll paste it into step 4.</p>
 </div>
 
 <div class="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-4">
     <h2 class="text-sm font-semibold mb-2">3. Write the WireGuard config on the node</h2>
-    <p class="text-xs text-slate-400 mb-2">
-        Replace <span class="font-mono">&lt;PASTE_NODE_PRIVATE_KEY&gt;</span> with the
-        contents of <span class="font-mono">/etc/wireguard/node.key</span>.
-    </p>
+    <p class="text-xs text-slate-400 mb-2">Replace <span class="font-mono">&lt;PASTE_NODE_PRIVATE_KEY&gt;</span> with the contents of <span class="font-mono">/etc/wireguard/node.key</span>.</p>
     <pre class="text-xs bg-slate-950 border border-slate-700 rounded p-3 overflow-x-auto">sudo tee /etc/wireguard/wg0.conf &gt; /dev/null &lt;&lt;'EOF'
 {{.Data.Config}}EOF
 sudo chmod 600 /etc/wireguard/wg0.conf</pre>
-
-    {{if not .Data.Gateway.WGPublicKey}}
-    <div class="mt-2 text-xs text-amber-300">
-        Gateway public key hasn't been detected yet. Once TunnelDeck reads it
-        from <span class="font-mono">wg show</span>, the config above will
-        update automatically.
-    </div>
-    {{end}}
-
-    {{if hasPrefix .Data.Endpoint "<"}}
-    <div class="mt-2 text-xs text-amber-300">
-        Gateway public IP isn't set. Fill it in on the
-        <a class="underline" href="/settings">Settings</a> page so the node
-        knows where to dial.
-    </div>
-    {{end}}
 </div>
 
 <div class="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-4">
-    <h2 class="text-sm font-semibold mb-2">4. Add the node's public key to the gateway</h2>
-    <p class="text-xs text-slate-400 mb-2">
-        On the <strong>gateway</strong> (this VPS), add the node as a peer to the
-        running WireGuard interface <em>and</em> to <span class="font-mono">wg0.conf</span>
-        so it survives reboots. Replace <span class="font-mono">&lt;NODE_PUBLIC_KEY&gt;</span>
-        with the contents of <span class="font-mono">/etc/wireguard/node.pub</span> from the node.
-    </p>
+    <h2 class="text-sm font-semibold mb-2">5. Bring up the tunnel on the node</h2>
+    <pre class="text-xs bg-slate-950 border border-slate-700 rounded p-3 overflow-x-auto">sudo systemctl enable --now wg-quick@wg0
+
+# verify
+sudo wg show
+ping -c3 {{stripCIDR .Data.Gateway.WGIP}}</pre>
+</div>
+
+</div><!-- /linux -->
+
+<!-- ==================== MACOS ==================== -->
+<div data-os="macos" style="display:none">
+
+<div class="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-4">
+    <h2 class="text-sm font-semibold mb-2">1. Install WireGuard on the node</h2>
+    <p class="text-xs text-slate-400 mb-2">The easiest path is the WireGuard app from the Mac App Store — it gives you a menubar icon and handles activation on boot:</p>
+    <pre class="text-xs bg-slate-950 border border-slate-700 rounded p-3 overflow-x-auto">https://apps.apple.com/app/wireguard/id1451685025</pre>
+    <p class="text-xs text-slate-400 mt-3 mb-2">Or via Homebrew for the CLI tools:</p>
+    <pre class="text-xs bg-slate-950 border border-slate-700 rounded p-3 overflow-x-auto">brew install wireguard-tools</pre>
+</div>
+
+<div class="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-4">
+    <h2 class="text-sm font-semibold mb-2">2. Generate a keypair on the node</h2>
+    <p class="text-xs text-slate-400 mb-2">In the WireGuard app: <span class="font-mono">Add Empty Tunnel</span> (⌘N). A new keypair is generated automatically; copy the <span class="font-mono">Public key</span> field — you'll paste it into step 4.</p>
+    <p class="text-xs text-slate-400 mt-2">CLI alternative:</p>
+    <pre class="text-xs bg-slate-950 border border-slate-700 rounded p-3 overflow-x-auto">wg genkey | tee ~/node.key | wg pubkey &gt; ~/node.pub
+chmod 600 ~/node.key
+cat ~/node.pub   # paste this into step 4</pre>
+</div>
+
+<div class="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-4">
+    <h2 class="text-sm font-semibold mb-2">3. Paste the WireGuard config</h2>
+    <p class="text-xs text-slate-400 mb-2">In the WireGuard app's tunnel editor, replace the contents with:</p>
+    <pre class="text-xs bg-slate-950 border border-slate-700 rounded p-3 overflow-x-auto">{{.Data.Config}}</pre>
+    <p class="text-xs text-slate-400 mt-2">The <span class="font-mono">PrivateKey</span> line is pre-filled by the app when you used <span class="font-mono">Add Empty Tunnel</span>; leave it alone and only change <span class="font-mono">Address</span>, <span class="font-mono">[Peer]</span>, <span class="font-mono">Endpoint</span>, <span class="font-mono">AllowedIPs</span>, and <span class="font-mono">PersistentKeepalive</span>.</p>
+</div>
+
+<div class="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-4">
+    <h2 class="text-sm font-semibold mb-2">5. Activate the tunnel on the node</h2>
+    <p class="text-xs text-slate-400 mb-2">Toggle the switch next to the tunnel name in the WireGuard app, then verify:</p>
+    <pre class="text-xs bg-slate-950 border border-slate-700 rounded p-3 overflow-x-auto">ping -c3 {{stripCIDR .Data.Gateway.WGIP}}</pre>
+    <p class="text-xs text-slate-400 mt-2">Enable <span class="font-mono">On-Demand</span> in the tunnel settings to have the Mac reconnect automatically.</p>
+</div>
+
+</div><!-- /macos -->
+
+<!-- ==================== WINDOWS ==================== -->
+<div data-os="windows" style="display:none">
+
+<div class="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-4">
+    <h2 class="text-sm font-semibold mb-2">1. Install WireGuard on the node</h2>
+    <p class="text-xs text-slate-400 mb-2">Download and install the official Windows client:</p>
+    <pre class="text-xs bg-slate-950 border border-slate-700 rounded p-3 overflow-x-auto">https://www.wireguard.com/install/</pre>
+    <p class="text-xs text-slate-400 mt-2">After install, open the WireGuard application from the Start menu.</p>
+</div>
+
+<div class="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-4">
+    <h2 class="text-sm font-semibold mb-2">2. Create a tunnel (auto-generates a keypair)</h2>
+    <p class="text-xs text-slate-400 mb-2">In the WireGuard UI, click <span class="font-mono">Add Tunnel → Add empty tunnel…</span> (Ctrl+N). The app generates a new private/public keypair and shows them in the editor. Copy the <span class="font-mono">Public key</span> — you'll paste it into step 4.</p>
+</div>
+
+<div class="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-4">
+    <h2 class="text-sm font-semibold mb-2">3. Paste the WireGuard config</h2>
+    <p class="text-xs text-slate-400 mb-2">Replace the config text in the editor with the block below. Keep the <span class="font-mono">PrivateKey = ...</span> line that the app already filled in; only change the other fields to match:</p>
+    <pre class="text-xs bg-slate-950 border border-slate-700 rounded p-3 overflow-x-auto">{{.Data.Config}}</pre>
+    <p class="text-xs text-slate-400 mt-2">Give the tunnel a name (e.g. <span class="font-mono">TunnelDeck</span>) and click <span class="font-mono">Save</span>.</p>
+</div>
+
+<div class="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-4">
+    <h2 class="text-sm font-semibold mb-2">5. Activate the tunnel on the node</h2>
+    <p class="text-xs text-slate-400 mb-2">Click the tunnel in the list and press <span class="font-mono">Activate</span>. Verify from an Administrator PowerShell:</p>
+    <pre class="text-xs bg-slate-950 border border-slate-700 rounded p-3 overflow-x-auto">ping {{stripCIDR .Data.Gateway.WGIP}}</pre>
+    <p class="text-xs text-slate-400 mt-2">Right-click the WireGuard tray icon → <span class="font-mono">Settings → Start automatically</span> if you want it to reconnect at boot.</p>
+</div>
+
+</div><!-- /windows -->
+
+<!-- ==================== STEP 4 (same across OSes) ==================== -->
+<div class="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-4">
+    <h2 class="text-sm font-semibold mb-2">4. Register the node's public key on the gateway</h2>
+    <p class="text-xs text-slate-400 mb-2">Run this on the <strong>gateway</strong> (this VPS). Replace <span class="font-mono">&lt;NODE_PUBLIC_KEY&gt;</span> with the value you copied in step 2:</p>
     <pre class="text-xs bg-slate-950 border border-slate-700 rounded p-3 overflow-x-auto"># add the peer at runtime (takes effect immediately)
 sudo wg set {{.Data.Gateway.WGIf}} peer &lt;NODE_PUBLIC_KEY&gt; allowed-ips {{.Data.Node.WGIP}}/32 persistent-keepalive {{.Data.Node.Keepalive}}
 
@@ -73,28 +157,6 @@ PublicKey = &lt;NODE_PUBLIC_KEY&gt;
 AllowedIPs = {{.Data.Node.WGIP}}/32
 PersistentKeepalive = {{.Data.Node.Keepalive}}
 EOF</pre>
-    <p class="text-xs text-slate-500 mt-2">
-        (A future release will do this for you via a one-time join token. For now
-        it's a manual step because the node hasn't sent its public key yet.)
-    </p>
-</div>
-
-<div class="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-4">
-    <h2 class="text-sm font-semibold mb-2">5. Bring up the tunnel on the node</h2>
-    <pre class="text-xs bg-slate-950 border border-slate-700 rounded p-3 overflow-x-auto">sudo systemctl enable --now wg-quick@wg0
-
-# verify:
-sudo wg show
-ping -c3 {{stripCIDR .Data.Gateway.WGIP}}</pre>
-</div>
-
-<div class="bg-slate-800 border border-slate-700 rounded-lg p-4">
-    <h2 class="text-sm font-semibold mb-2">6. Verify from TunnelDeck</h2>
-    <p class="text-xs text-slate-400 mb-2">
-        Go back to the <a class="underline" href="/nodes">Nodes page</a> and
-        refresh. The node should show <span class="text-emerald-300">online</span>
-        with a recent handshake. Once you see that, add port forwards for it on
-        the <a class="underline" href="/forwards">Forwards page</a>.
-    </p>
+    <p class="text-xs text-slate-500 mt-2">Step 4 is the same regardless of which OS the node runs — the gateway doesn't care.</p>
 </div>
 {{end}}
