@@ -56,6 +56,16 @@ func (h Host) Run(ctx context.Context) Report {
 		r.DefaultWANIf = parseDefaultWAN(res.Stdout)
 	}
 
+	// Best-effort public IP guess: the first global IPv4 on the WAN interface.
+	// On VPSes with a direct public IP (Biznet, Hetzner, DO, etc.) this is
+	// correct. On home setups behind NAT this will be the LAN IP and the
+	// user needs to set the real public IP in Settings manually.
+	if r.DefaultWANIf != "" {
+		if res := h.Runner.Run(ctx, "ip", []string{"-4", "-o", "addr", "show", "dev", r.DefaultWANIf, "scope", "global"}, ""); res.Err == nil {
+			r.PublicIPGuess = parseFirstGlobalIPv4(res.Stdout)
+		}
+	}
+
 	if sysexec.Which("wg") {
 		r.WGInstalled = true
 		ins := wg.Inspector{Runner: h.Runner}
@@ -131,6 +141,28 @@ func parseDefaultWAN(s string) string {
 	for i := 0; i < len(f)-1; i++ {
 		if f[i] == "dev" {
 			return f[i+1]
+		}
+	}
+	return ""
+}
+
+// parseFirstGlobalIPv4 extracts the first IPv4 address from the output of
+// `ip -4 -o addr show dev <IF> scope global`. That command returns lines like:
+//
+//	2: eth0    inet 103.129.148.182/24 brd 103.129.148.255 scope global eth0 ...
+//
+// We look for the token immediately after "inet" and strip the /mask.
+func parseFirstGlobalIPv4(s string) string {
+	for _, line := range strings.Split(s, "\n") {
+		f := strings.Fields(line)
+		for i := 0; i < len(f)-1; i++ {
+			if f[i] == "inet" {
+				cidr := f[i+1]
+				if j := strings.Index(cidr, "/"); j > 0 {
+					return cidr[:j]
+				}
+				return cidr
+			}
 		}
 	}
 	return ""

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -482,13 +483,13 @@ type inspectData struct {
 
 func (s *Server) getInspect(w http.ResponseWriter, r *http.Request) {
 	g, _ := s.Deps.DB.GetGateway(r.Context())
-	rep := inspect.Host{Runner: s.Deps.Runner}.Run(r.Context())
+	rep := inspect.Host{Runner: s.Deps.Runner, ReadFile: os.ReadFile}.Run(r.Context())
 	s.render(w, r, "inspect", "Inspect", inspectData{Report: rep, Gateway: g}, flashFromQuery(r))
 }
 
 func (s *Server) postAdopt(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	rep := inspect.Host{Runner: s.Deps.Runner}.Run(ctx)
+	rep := inspect.Host{Runner: s.Deps.Runner, ReadFile: os.ReadFile}.Run(ctx)
 
 	runner := adopt.Runner{DB: s.Deps.DB, Runner: s.Deps.Runner}
 	opts := adopt.Options{

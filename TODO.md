@@ -184,6 +184,36 @@ service definition.
 Federate multiple gateways: `tunneldeck-gateway-us`, `tunneldeck-gateway-sg`.
 UI shows all; forwards can be assigned to specific gateways. v1.0-level.
 
+### Hosted / split control plane (killer feature)
+
+Right now TunnelDeck is gateway-colocated: the control plane and the
+nft/wg kernel operations run on the same host, so the user must SSH
+to the VPS to reach the UI (or expose 9443 publicly, which is the
+workaround we document today).
+
+Long-term: split the control plane from the gateway so the Web UI
+can run anywhere (Vercel, a laptop, a Raspberry Pi on the home LAN)
+and multiple gateways connect *to it*. Each gateway runs a small
+agent that:
+  - dials out to the control plane over an authenticated, mTLS or
+    WireGuard-over-WireGuard channel (so we don't need to open
+    inbound ports on the gateway for the control plane itself);
+  - receives signed "desired state" payloads (forwards, nodes,
+    adopt-or-not) and applies them locally via nftables/wg;
+  - pushes back telemetry (peer handshakes, counters, audit events).
+
+This enables:
+  - one dashboard, many gateways (US/SG/EU);
+  - gateway machines can stay 100% private (UI port closed, SSH
+    key-only, nothing public besides game ports);
+  - user runs the UI where it's convenient, not where the gateway is.
+
+Non-trivial rewrite: needs a persistent gateway↔control-plane
+channel, a signing key per gateway, idempotent desired-state
+protocol, and a rethink of auth (right now it's one admin per
+gateway; hosted model probably wants teams). Parking here as the
+v2.0 north star.
+
 ### Docker image
 
 `ghcr.io/<owner>/tunneldeck:vX.Y.Z`. Useful for users who run

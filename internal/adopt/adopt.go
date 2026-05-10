@@ -114,8 +114,13 @@ func (r Runner) Run(ctx context.Context, rep inspect.Report, opt Options) (Resul
 	if rep.DefaultWANIf != "" {
 		g.WANIf = rep.DefaultWANIf
 	}
+	// Opt.PublicIP (from the form) wins; otherwise fall back to whatever
+	// inspect guessed from `ip addr show`. Only overwrite the stored value
+	// if we actually have something — don't blank out a previously-set IP.
 	if opt.PublicIP != "" {
 		g.PublicIP = opt.PublicIP
+	} else if g.PublicIP == "" && rep.PublicIPGuess != "" {
+		g.PublicIP = rep.PublicIPGuess
 	}
 
 	switch opt.NFTStrategy {
