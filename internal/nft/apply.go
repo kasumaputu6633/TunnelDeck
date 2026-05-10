@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/tunneldeck/tunneldeck/internal/db"
+	"github.com/kasumaputu6633/tunneldeck/internal/db"
 )
 
 type ApplyInput struct {

@@ -20,14 +20,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/tunneldeck/tunneldeck/internal/auth"
-	"github.com/tunneldeck/tunneldeck/internal/config"
-	"github.com/tunneldeck/tunneldeck/internal/db"
-	"github.com/tunneldeck/tunneldeck/internal/doctor"
-	"github.com/tunneldeck/tunneldeck/internal/httpsrv"
-	"github.com/tunneldeck/tunneldeck/internal/inspect"
-	"github.com/tunneldeck/tunneldeck/internal/nft"
-	"github.com/tunneldeck/tunneldeck/internal/sysexec"
+	"github.com/kasumaputu6633/tunneldeck/internal/auth"
+	"github.com/kasumaputu6633/tunneldeck/internal/config"
+	"github.com/kasumaputu6633/tunneldeck/internal/db"
+	"github.com/kasumaputu6633/tunneldeck/internal/doctor"
+	"github.com/kasumaputu6633/tunneldeck/internal/httpsrv"
+	"github.com/kasumaputu6633/tunneldeck/internal/inspect"
+	"github.com/kasumaputu6633/tunneldeck/internal/nft"
+	"github.com/kasumaputu6633/tunneldeck/internal/sysexec"
 )
 
 var version = "0.1.0-dev"

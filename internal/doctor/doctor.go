@@ -9,8 +9,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/tunneldeck/tunneldeck/internal/nft"
-	"github.com/tunneldeck/tunneldeck/internal/sysexec"
+	"github.com/kasumaputu6633/tunneldeck/internal/nft"
+	"github.com/kasumaputu6633/tunneldeck/internal/sysexec"
 )
 
 type Level string

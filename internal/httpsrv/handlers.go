@@ -10,13 +10,13 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/tunneldeck/tunneldeck/internal/adopt"
-	"github.com/tunneldeck/tunneldeck/internal/auth"
-	"github.com/tunneldeck/tunneldeck/internal/db"
-	"github.com/tunneldeck/tunneldeck/internal/forwards"
-	"github.com/tunneldeck/tunneldeck/internal/inspect"
-	"github.com/tunneldeck/tunneldeck/internal/nft"
-	"github.com/tunneldeck/tunneldeck/internal/wg"
+	"github.com/kasumaputu6633/tunneldeck/internal/adopt"
+	"github.com/kasumaputu6633/tunneldeck/internal/auth"
+	"github.com/kasumaputu6633/tunneldeck/internal/db"
+	"github.com/kasumaputu6633/tunneldeck/internal/forwards"
+	"github.com/kasumaputu6633/tunneldeck/internal/inspect"
+	"github.com/kasumaputu6633/tunneldeck/internal/nft"
+	"github.com/kasumaputu6633/tunneldeck/internal/wg"
 )
 
 // ---- login / logout ----

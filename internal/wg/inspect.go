@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tunneldeck/tunneldeck/internal/sysexec"
+	"github.com/kasumaputu6633/tunneldeck/internal/sysexec"
 )
 
 // Peer is one line of `wg show <iface> dump`:

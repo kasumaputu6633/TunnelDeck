@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/tunneldeck/tunneldeck/internal/db"
+	"github.com/kasumaputu6633/tunneldeck/internal/db"
 )
 
 func TestValidate_GoodMinecraftForward(t *testing.T) {

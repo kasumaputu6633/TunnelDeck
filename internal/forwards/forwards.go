@@ -10,7 +10,7 @@ import (
 	"net"
 	"strings"
 
-	"github.com/tunneldeck/tunneldeck/internal/db"
+	"github.com/kasumaputu6633/tunneldeck/internal/db"
 )
 
 // ProtectedPort is a port that TunnelDeck refuses to forward, or warns on.

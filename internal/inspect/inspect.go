@@ -6,9 +6,9 @@ import (
 	"context"
 	"strings"
 
-	"github.com/tunneldeck/tunneldeck/internal/nft"
-	"github.com/tunneldeck/tunneldeck/internal/sysexec"
-	"github.com/tunneldeck/tunneldeck/internal/wg"
+	"github.com/kasumaputu6633/tunneldeck/internal/nft"
+	"github.com/kasumaputu6633/tunneldeck/internal/sysexec"
+	"github.com/kasumaputu6633/tunneldeck/internal/wg"
 )
 
 type Report struct {

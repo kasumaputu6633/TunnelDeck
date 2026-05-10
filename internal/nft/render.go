@@ -10,8 +10,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/tunneldeck/tunneldeck/internal/db"
-	"github.com/tunneldeck/tunneldeck/internal/sysexec"
+	"github.com/kasumaputu6633/tunneldeck/internal/db"
+	"github.com/kasumaputu6633/tunneldeck/internal/sysexec"
 )
 
 // RenderSpec is derived from DB state by the caller.

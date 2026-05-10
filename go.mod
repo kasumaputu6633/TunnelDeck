@@ -1,4 +1,4 @@
-module github.com/tunneldeck/tunneldeck
+module github.com/kasumaputu6633/tunneldeck
 
 go 1.25.0
 

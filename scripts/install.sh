@@ -46,7 +46,7 @@ BIN_PATH="/usr/local/bin/tunneldeck"
 UNIT_PATH="/etc/systemd/system/tunneldeck.service"
 BIN_SOURCE=""
 RELEASE_TAG="${TUNNELDECK_RELEASE:-latest}"
-RELEASE_REPO="${TUNNELDECK_REPO:-kasumaputu6633/TunnelDeck}"
+RELEASE_REPO="${TUNNELDECK_REPO:-kasumaputu6633/tunneldeck}"
 ASSUME_YES="no"
 ALLOW_INTERACTIVE="yes"
 

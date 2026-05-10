@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/tunneldeck/tunneldeck/internal/auth"
+	"github.com/kasumaputu6633/tunneldeck/internal/auth"
 )
 
 func sessionFromCtx(ctx context.Context) *auth.Session {

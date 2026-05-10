@@ -15,10 +15,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tunneldeck/tunneldeck/internal/db"
-	"github.com/tunneldeck/tunneldeck/internal/inspect"
-	"github.com/tunneldeck/tunneldeck/internal/nft"
-	"github.com/tunneldeck/tunneldeck/internal/sysexec"
+	"github.com/kasumaputu6633/tunneldeck/internal/db"
+	"github.com/kasumaputu6633/tunneldeck/internal/inspect"
+	"github.com/kasumaputu6633/tunneldeck/internal/nft"
+	"github.com/kasumaputu6633/tunneldeck/internal/sysexec"
 )
 
 type Options struct {

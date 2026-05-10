@@ -11,10 +11,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
 
-	"github.com/tunneldeck/tunneldeck/internal/auth"
-	"github.com/tunneldeck/tunneldeck/internal/db"
-	"github.com/tunneldeck/tunneldeck/internal/nft"
-	"github.com/tunneldeck/tunneldeck/internal/sysexec"
+	"github.com/kasumaputu6633/tunneldeck/internal/auth"
+	"github.com/kasumaputu6633/tunneldeck/internal/db"
+	"github.com/kasumaputu6633/tunneldeck/internal/nft"
+	"github.com/kasumaputu6633/tunneldeck/internal/sysexec"
 )
 
 //go:embed templates/*

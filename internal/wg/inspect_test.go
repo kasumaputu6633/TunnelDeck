@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/tunneldeck/tunneldeck/internal/sysexec"
+	"github.com/kasumaputu6633/tunneldeck/internal/sysexec"
 )
 
 func TestParseDump_TypicalOutput(t *testing.T) {

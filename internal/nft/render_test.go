@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tunneldeck/tunneldeck/internal/db"
+	"github.com/kasumaputu6633/tunneldeck/internal/db"
 )
 
 func TestRender_UsesDedicatedTable_NoGlobalFlush(t *testing.T) {

@@ -14,7 +14,7 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/tunneldeck/tunneldeck/internal/db"
+	"github.com/kasumaputu6633/tunneldeck/internal/db"
 )
 
 const (

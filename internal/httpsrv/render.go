@@ -5,7 +5,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/tunneldeck/tunneldeck/internal/auth"
+	"github.com/kasumaputu6633/tunneldeck/internal/auth"
 )
 
 type Flash struct {
