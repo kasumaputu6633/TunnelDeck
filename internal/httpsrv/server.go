@@ -75,6 +75,7 @@ func New(deps Deps) (*Server, error) {
 		gr.Get("/", s.dashboard)
 		gr.Get("/nodes", s.listNodes)
 		gr.Post("/nodes", s.createNode)
+		gr.Get("/nodes/{id}/setup", s.nodeSetup)
 		gr.Post("/nodes/{id}/delete", s.deleteNode)
 
 		gr.Get("/forwards", s.listForwards)
@@ -99,6 +100,12 @@ func parseTemplates() (map[string]*template.Template, error) {
 	funcs := template.FuncMap{
 		"hasPrefix": func(s, prefix string) bool {
 			return len(s) >= len(prefix) && s[:len(prefix)] == prefix
+		},
+		"stripCIDR": func(s string) string {
+			if i := strings.Index(s, "/"); i > 0 {
+				return s[:i]
+			}
+			return s
 		},
 	}
 

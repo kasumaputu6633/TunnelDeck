@@ -115,6 +115,44 @@ scp tunneldeck scripts/install.sh user@your-vps:~/
 ssh user@your-vps 'sudo bash install.sh --binary ./tunneldeck'
 ```
 
+## Setting up a node
+
+TunnelDeck manages the **gateway** side only. The node (your home server, another VPS, or any Linux machine that should be reachable through the tunnel) has to join WireGuard manually — but the Web UI gives you a pre-filled `wg0.conf` and the exact commands you need.
+
+On the gateway (Web UI):
+
+1. Go to **Nodes** → **Add node**, enter a name (e.g. `home-lab`), click **Allocate & create**.
+2. You'll be redirected to a setup page showing:
+   - An install command for WireGuard (`apt install wireguard` on Debian/Ubuntu, `pacman -S wireguard-tools` on Arch).
+   - Commands to generate a keypair on the node.
+   - A `wg0.conf` template pre-filled with the gateway's endpoint, public key, assigned WG IP, and keepalive.
+   - The `wg set` + `wg0.conf` snippet you run on the gateway to register the node's public key as a peer.
+
+On the node, follow the page step-by-step:
+
+```bash
+# 1. install
+sudo apt install -y wireguard wireguard-tools
+
+# 2. generate keys
+wg genkey | sudo tee /etc/wireguard/node.key | wg pubkey | sudo tee /etc/wireguard/node.pub
+sudo chmod 600 /etc/wireguard/node.key
+
+# 3. write wg0.conf (copy the full block from the UI, paste /etc/wireguard/node.key)
+sudo nano /etc/wireguard/wg0.conf
+
+# 4. start the tunnel
+sudo systemctl enable --now wg-quick@wg0
+
+# 5. verify
+sudo wg show
+ping -c3 <gateway_wg_ip>
+```
+
+Back in the Web UI, refresh the **Nodes** page. The node should show as **online** with a recent handshake. Now you can add forwards that target it.
+
+Why is this manual? TunnelDeck only talks to the gateway kernel — it has no credentials to log into your node and doesn't want them. A future release will add a one-time join token flow so the node can push its public key itself, but for v0.1 the key exchange is intentionally manual.
+
 ## Safety rules
 
 - Never flushes the global nftables ruleset. Manages a dedicated table only.

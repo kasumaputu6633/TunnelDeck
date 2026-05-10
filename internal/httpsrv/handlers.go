@@ -229,7 +229,91 @@ func (s *Server) createNode(w http.ResponseWriter, r *http.Request) {
 	_ = s.Deps.DB.AuditWrite(ctx, currentActor(r), "node.add", fmt.Sprintf("%d", id),
 		fmt.Sprintf(`{"name":%q,"wg_ip":%q}`, name, wgIP))
 
-	http.Redirect(w, r, fmt.Sprintf("/nodes?flash=ok:node+%s+added+(%s)", name, wgIP), http.StatusSeeOther)
+	// Send the user to the setup page for this node so they can copy the
+	// wg0.conf template and install commands.
+	http.Redirect(w, r, fmt.Sprintf("/nodes/%d/setup?flash=ok:node+%s+added+(%s)", id, name, wgIP), http.StatusSeeOther)
+}
+
+// nodeSetupData is what /nodes/{id}/setup renders.
+type nodeSetupData struct {
+	Node            db.Node
+	Gateway         db.Gateway
+	Endpoint        string // "<public_ip>:<wg_port>" or ":port" if IP missing
+	NodeAddress     string // "10.66.66.2/24" for the node's own Address line
+	GatewayAllowed  string // what AllowedIPs on the node points at (gateway /32 by default)
+	Config          string // the rendered wg0.conf body
+	HasPublicKey    bool   // true once the node has joined and we have its pubkey
+}
+
+func (s *Server) nodeSetup(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, "bad id", http.StatusBadRequest)
+		return
+	}
+
+	nodes, _ := s.Deps.DB.ListNodes(ctx)
+	var node db.Node
+	found := false
+	for _, n := range nodes {
+		if n.ID == id {
+			node = n
+			found = true
+			break
+		}
+	}
+	if !found {
+		http.Error(w, "node not found", http.StatusNotFound)
+		return
+	}
+
+	g, err := s.Deps.DB.GetGateway(ctx)
+	if err != nil {
+		http.Error(w, "gateway: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Build the endpoint string. If the public IP hasn't been set yet, leave
+	// a placeholder so the user notices.
+	pubIP := g.PublicIP
+	if pubIP == "" {
+		pubIP = "<YOUR_GATEWAY_PUBLIC_IP>"
+	}
+	endpoint := fmt.Sprintf("%s:%d", pubIP, g.WGPort)
+
+	// Node's Address is its /24 slot in the wg subnet; AllowedIPs on the
+	// node side points at the gateway's /32 so only the tunnel carries
+	// gateway traffic.
+	nodeAddr := fmt.Sprintf("%s/24", node.WGIP)
+	gwAllowed := stripCIDR(g.WGIP) + "/32"
+
+	cfg := wg.RenderNodeConfig(
+		nodeAddr,
+		"<PASTE_NODE_PRIVATE_KEY>",
+		defaultStr(g.WGPublicKey, "<GATEWAY_PUBLIC_KEY_NOT_DETECTED_YET>"),
+		endpoint,
+		gwAllowed,
+		node.Keepalive,
+		1380,
+	)
+
+	s.render(w, r, "node_setup", "Node setup — "+node.Name, nodeSetupData{
+		Node:           node,
+		Gateway:        g,
+		Endpoint:       endpoint,
+		NodeAddress:    nodeAddr,
+		GatewayAllowed: gwAllowed,
+		Config:         cfg,
+		HasPublicKey:   node.PublicKey != "",
+	}, flashFromQuery(r))
+}
+
+func defaultStr(s, fallback string) string {
+	if s == "" {
+		return fallback
+	}
+	return s
 }
 
 func (s *Server) deleteNode(w http.ResponseWriter, r *http.Request) {

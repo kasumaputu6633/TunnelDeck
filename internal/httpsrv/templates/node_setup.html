@@ -1,0 +1,100 @@
+{{define "content"}}
+<div class="mb-4">
+    <a href="/nodes" class="text-xs text-slate-400 hover:text-slate-200">← back to nodes</a>
+    <h1 class="text-lg font-semibold mt-1">Setup: {{.Data.Node.Name}}</h1>
+    <p class="text-sm text-slate-400">Assigned WG IP: <span class="font-mono">{{.Data.Node.WGIP}}</span></p>
+</div>
+
+<div class="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-4">
+    <h2 class="text-sm font-semibold mb-2">1. Install WireGuard on the node</h2>
+    <p class="text-xs text-slate-400 mb-2">Ubuntu/Debian:</p>
+    <pre class="text-xs bg-slate-950 border border-slate-700 rounded p-3 overflow-x-auto">sudo apt update
+sudo apt install -y wireguard wireguard-tools</pre>
+
+    <p class="text-xs text-slate-400 mt-3 mb-2">Arch/CachyOS:</p>
+    <pre class="text-xs bg-slate-950 border border-slate-700 rounded p-3 overflow-x-auto">sudo pacman -S --needed wireguard-tools</pre>
+</div>
+
+<div class="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-4">
+    <h2 class="text-sm font-semibold mb-2">2. Generate a keypair on the node</h2>
+    <p class="text-xs text-slate-400 mb-2">Run this on the node (the private key must never leave the node):</p>
+    <pre class="text-xs bg-slate-950 border border-slate-700 rounded p-3 overflow-x-auto">wg genkey | sudo tee /etc/wireguard/node.key | wg pubkey | sudo tee /etc/wireguard/node.pub
+sudo chmod 600 /etc/wireguard/node.key</pre>
+    <p class="text-xs text-slate-400 mt-2">
+        Copy the <span class="font-mono">node.pub</span> value — you'll paste it into the
+        gateway's <span class="font-mono">wg0.conf</span> in step 4.
+    </p>
+</div>
+
+<div class="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-4">
+    <h2 class="text-sm font-semibold mb-2">3. Write the WireGuard config on the node</h2>
+    <p class="text-xs text-slate-400 mb-2">
+        Replace <span class="font-mono">&lt;PASTE_NODE_PRIVATE_KEY&gt;</span> with the
+        contents of <span class="font-mono">/etc/wireguard/node.key</span>.
+    </p>
+    <pre class="text-xs bg-slate-950 border border-slate-700 rounded p-3 overflow-x-auto">sudo tee /etc/wireguard/wg0.conf &gt; /dev/null &lt;&lt;'EOF'
+{{.Data.Config}}EOF
+sudo chmod 600 /etc/wireguard/wg0.conf</pre>
+
+    {{if not .Data.Gateway.WGPublicKey}}
+    <div class="mt-2 text-xs text-amber-300">
+        Gateway public key hasn't been detected yet. Once TunnelDeck reads it
+        from <span class="font-mono">wg show</span>, the config above will
+        update automatically.
+    </div>
+    {{end}}
+
+    {{if hasPrefix .Data.Endpoint "<"}}
+    <div class="mt-2 text-xs text-amber-300">
+        Gateway public IP isn't set. Fill it in on the
+        <a class="underline" href="/settings">Settings</a> page so the node
+        knows where to dial.
+    </div>
+    {{end}}
+</div>
+
+<div class="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-4">
+    <h2 class="text-sm font-semibold mb-2">4. Add the node's public key to the gateway</h2>
+    <p class="text-xs text-slate-400 mb-2">
+        On the <strong>gateway</strong> (this VPS), add the node as a peer to the
+        running WireGuard interface <em>and</em> to <span class="font-mono">wg0.conf</span>
+        so it survives reboots. Replace <span class="font-mono">&lt;NODE_PUBLIC_KEY&gt;</span>
+        with the contents of <span class="font-mono">/etc/wireguard/node.pub</span> from the node.
+    </p>
+    <pre class="text-xs bg-slate-950 border border-slate-700 rounded p-3 overflow-x-auto"># add the peer at runtime (takes effect immediately)
+sudo wg set {{.Data.Gateway.WGIf}} peer &lt;NODE_PUBLIC_KEY&gt; allowed-ips {{.Data.Node.WGIP}}/32 persistent-keepalive {{.Data.Node.Keepalive}}
+
+# persist to disk so the peer comes back on reboot
+sudo tee -a /etc/wireguard/wg0.conf &gt; /dev/null &lt;&lt;'EOF'
+
+[Peer]
+# tunneldeck:node={{.Data.Node.Name}}
+PublicKey = &lt;NODE_PUBLIC_KEY&gt;
+AllowedIPs = {{.Data.Node.WGIP}}/32
+PersistentKeepalive = {{.Data.Node.Keepalive}}
+EOF</pre>
+    <p class="text-xs text-slate-500 mt-2">
+        (A future release will do this for you via a one-time join token. For now
+        it's a manual step because the node hasn't sent its public key yet.)
+    </p>
+</div>
+
+<div class="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-4">
+    <h2 class="text-sm font-semibold mb-2">5. Bring up the tunnel on the node</h2>
+    <pre class="text-xs bg-slate-950 border border-slate-700 rounded p-3 overflow-x-auto">sudo systemctl enable --now wg-quick@wg0
+
+# verify:
+sudo wg show
+ping -c3 {{stripCIDR .Data.Gateway.WGIP}}</pre>
+</div>
+
+<div class="bg-slate-800 border border-slate-700 rounded-lg p-4">
+    <h2 class="text-sm font-semibold mb-2">6. Verify from TunnelDeck</h2>
+    <p class="text-xs text-slate-400 mb-2">
+        Go back to the <a class="underline" href="/nodes">Nodes page</a> and
+        refresh. The node should show <span class="text-emerald-300">online</span>
+        with a recent handshake. Once you see that, add port forwards for it on
+        the <a class="underline" href="/forwards">Forwards page</a>.
+    </p>
+</div>
+{{end}}
