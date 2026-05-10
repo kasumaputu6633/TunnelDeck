@@ -470,6 +470,9 @@ func (s *Server) applyForwards(w http.ResponseWriter, r *http.Request) {
 	if res.DryRun {
 		kind = "warn"
 		msg = "dry-run: nft script rendered but not applied (monitor mode)"
+	} else if len(res.Removed) > 0 {
+		msg += fmt.Sprintf("; flushed %d active connection(s) from %d removed port(s)",
+			res.FlushedConnections, len(res.Removed))
 	}
 	http.Redirect(w, r, "/forwards?flash="+kind+":"+msg, http.StatusSeeOther)
 }

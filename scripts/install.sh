@@ -232,7 +232,7 @@ confirm_mode
 # --- Install --------------------------------------------------------------
 
 echo "=> installing dependencies (only missing packages)"
-REQUIRED=(wireguard wireguard-tools nftables iproute2 iputils-ping ca-certificates)
+REQUIRED=(wireguard wireguard-tools nftables conntrack iproute2 iputils-ping ca-certificates)
 MISSING=()
 for p in "${REQUIRED[@]}"; do
     if ! dpkg -s "$p" >/dev/null 2>&1; then
