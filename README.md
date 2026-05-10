@@ -16,13 +16,33 @@ TunnelDeck is **only the control plane**. Traffic never goes through the Go proc
 
 ## Install
 
-**On your VPS (gateway):**
+**On your VPS (gateway)** — pick the mode that matches your setup:
 
 ```bash
-curl -fsSL https://github.com/tunneldeck/tunneldeck/releases/latest/download/install.sh | sudo bash
+# existing WireGuard/nftables setup? import it safely
+curl -fsSL https://github.com/kasumaputu6633/tunneldeck/releases/latest/download/install.sh \
+  | sudo bash -s -- --adopt
+
+# clean VPS? let the installer set everything up
+curl -fsSL https://github.com/kasumaputu6633/tunneldeck/releases/latest/download/install.sh \
+  | sudo bash -s -- --fresh
+
+# just look, never write
+curl -fsSL https://github.com/kasumaputu6633/tunneldeck/releases/latest/download/install.sh \
+  | sudo bash -s -- --monitor-only
 ```
 
-The installer detects any existing WireGuard/nftables state, prints a summary, recommends a mode, and asks you to confirm. The binary is downloaded from the same GitHub release.
+The `curl | bash` pattern can't prompt interactively (stdin is the curl pipe, not your terminal), so you need to pass the mode flag up front.
+
+**Prefer an interactive prompt?** Download the script first, then run it:
+
+```bash
+curl -fsSL https://github.com/kasumaputu6633/tunneldeck/releases/latest/download/install.sh -o install.sh
+chmod +x install.sh
+sudo ./install.sh
+```
+
+The installer inspects the host, prints a summary, recommends a mode, and asks you to confirm. Either way, the binary is downloaded from the same GitHub release.
 
 **From your laptop (connect to the UI):**
 
@@ -39,10 +59,10 @@ sudo journalctl -u tunneldeck | grep -A1 first-run
 
 ## Install modes
 
-Two ways to install:
+Two ways to run the installer:
 
-1. **Interactive** (recommended). Run `sudo bash install.sh` with no flags. The installer inspects the host (wg interfaces, nft tables, DNAT rules, `wg0.conf`, `ip_forward`), prints a summary, recommends a mode, and asks you to confirm.
-2. **Non-interactive** (CI/automation). Pass exactly one mode flag. Add `--yes` to skip confirmation, or `--no-interactive` to fail instead of prompting.
+1. **Interactive** (recommended when you have a TTY). Run `sudo ./install.sh` after downloading it. The installer inspects the host (wg interfaces, nft tables, DNAT rules, `wg0.conf`, `ip_forward`), prints a summary, recommends a mode, and asks you to confirm.
+2. **Non-interactive** (one-liners, CI, automation). Pass exactly one mode flag. Add `-y` / `--yes` to skip the final confirmation, or `--no-interactive` to fail instead of prompting.
 
 Modes:
 
@@ -53,7 +73,7 @@ Modes:
 ## Install from source (developers)
 
 ```bash
-git clone https://github.com/tunneldeck/tunneldeck
+git clone https://github.com/kasumaputu6633/tunneldeck
 cd tunneldeck
 GOOS=linux GOARCH=amd64 go build -o tunneldeck ./cmd/tunneldeck
 scp tunneldeck scripts/install.sh user@your-vps:~/
