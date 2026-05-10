@@ -1,0 +1,54 @@
+{{define "base"}}<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>TunnelDeck — {{.Title}}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="/static/htmx.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>body{font-family:ui-sans-serif,system-ui,sans-serif}</style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen">
+    {{if .Session}}
+    <header class="border-b border-slate-800 bg-slate-950">
+        <div class="max-w-6xl mx-auto px-4 py-3 flex items-center gap-6">
+            <a href="/" class="font-semibold text-white">TunnelDeck</a>
+            <nav class="flex gap-4 text-sm text-slate-300">
+                <a class="hover:text-white" href="/">Dashboard</a>
+                <a class="hover:text-white" href="/nodes">Nodes</a>
+                <a class="hover:text-white" href="/forwards">Forwards</a>
+                <a class="hover:text-white" href="/inspect">Inspect</a>
+                <a class="hover:text-white" href="/logs">Logs</a>
+                <a class="hover:text-white" href="/settings">Settings</a>
+            </nav>
+            <div class="ml-auto text-sm text-slate-400 flex items-center gap-3">
+                <span>{{.Session.Username}}</span>
+                <form method="POST" action="/logout">
+                    <input type="hidden" name="csrf" value="{{.Session.CSRFToken}}">
+                    <button class="text-slate-400 hover:text-white underline-offset-4 hover:underline">sign out</button>
+                </form>
+            </div>
+        </div>
+    </header>
+    {{end}}
+
+    {{if .Flash}}
+    <div class="max-w-6xl mx-auto px-4 mt-4">
+        <div class="rounded border px-3 py-2 text-sm
+            {{if eq .Flash.Kind "error"}}bg-red-950 border-red-800 text-red-200
+            {{else if eq .Flash.Kind "warn"}}bg-amber-950 border-amber-800 text-amber-200
+            {{else}}bg-emerald-950 border-emerald-800 text-emerald-200{{end}}">
+            {{.Flash.Text}}
+        </div>
+    </div>
+    {{end}}
+
+    <main class="max-w-6xl mx-auto px-4 py-6">
+        {{template "content" .}}
+    </main>
+
+    <footer class="max-w-6xl mx-auto px-4 py-6 text-xs text-slate-500">
+        TunnelDeck MVP — kernel-only data plane (nftables + WireGuard)
+    </footer>
+</body>
+</html>{{end}}

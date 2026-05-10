@@ -1,0 +1,132 @@
+{{define "content"}}
+<div class="flex items-center justify-between mb-4">
+    <h1 class="text-lg font-semibold">Port forwards</h1>
+    <form method="POST" action="/forwards/apply">
+        <input type="hidden" name="csrf" value="{{.Session.CSRFToken}}">
+        <button class="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded px-3 py-2">
+            Apply nftables
+        </button>
+    </form>
+</div>
+
+{{if .Data.ApplyPreview}}
+<div class="bg-slate-950 border border-slate-700 rounded-lg p-3 mb-4">
+    <div class="text-xs text-slate-400 mb-2">Rendered nftables (dry-run):</div>
+    <pre class="text-xs text-emerald-300 overflow-x-auto">{{.Data.ApplyPreview}}</pre>
+</div>
+{{end}}
+
+<div class="bg-slate-800 border border-slate-700 rounded-lg overflow-hidden mb-6">
+    <table class="w-full text-sm">
+        <thead class="text-xs text-slate-400 bg-slate-900">
+            <tr>
+                <th class="text-left px-3 py-2">Name</th>
+                <th class="text-left px-3 py-2">Proto / Public</th>
+                <th class="text-left px-3 py-2">Target</th>
+                <th class="text-left px-3 py-2">Log</th>
+                <th class="text-left px-3 py-2">State</th>
+                <th class="px-3 py-2"></th>
+            </tr>
+        </thead>
+        <tbody>
+        {{range .Data.Forwards}}
+            <tr class="border-t border-slate-700">
+                <td class="px-3 py-2">{{.Name}}</td>
+                <td class="px-3 py-2 font-mono">{{.Proto}}/{{.PublicPort}}</td>
+                <td class="px-3 py-2 font-mono">{{.NodeName}} ({{.NodeWGIP}}:{{.TargetPort}})</td>
+                <td class="px-3 py-2 text-xs text-slate-400">{{.LogMode}}</td>
+                <td class="px-3 py-2">
+                    {{if .Enabled}}<span class="text-emerald-400 text-xs">enabled</span>
+                    {{else}}<span class="text-slate-500 text-xs">disabled</span>{{end}}
+                </td>
+                <td class="px-3 py-2 text-right">
+                    <form method="POST" action="/forwards/{{.ID}}/toggle" class="inline">
+                        <input type="hidden" name="csrf" value="{{$.Session.CSRFToken}}">
+                        <input type="hidden" name="enabled" value="{{if .Enabled}}0{{else}}1{{end}}">
+                        <button class="text-xs text-slate-300 hover:text-white">
+                            {{if .Enabled}}disable{{else}}enable{{end}}
+                        </button>
+                    </form>
+                    <form method="POST" action="/forwards/{{.ID}}/delete" class="inline ml-3"
+                          onsubmit="return confirm('Delete forward {{.Name}}?')">
+                        <input type="hidden" name="csrf" value="{{$.Session.CSRFToken}}">
+                        <button class="text-xs text-red-400 hover:text-red-300">delete</button>
+                    </form>
+                </td>
+            </tr>
+        {{else}}
+            <tr><td colspan="6" class="text-center text-slate-400 py-6">No forwards yet.</td></tr>
+        {{end}}
+        </tbody>
+    </table>
+</div>
+
+{{if .Data.Issues}}
+<div class="bg-amber-950 border border-amber-800 rounded-lg p-3 mb-4 text-amber-200 text-sm">
+    <div class="font-semibold mb-1">Please review:</div>
+    <ul class="list-disc list-inside text-xs space-y-1">
+        {{range .Data.Issues}}
+            <li>[{{.Severity}}] {{.Field}}: {{.Message}}</li>
+        {{end}}
+    </ul>
+</div>
+{{end}}
+
+<div class="bg-slate-800 border border-slate-700 rounded-lg p-4 max-w-2xl">
+    <h2 class="text-sm font-semibold mb-3">Add forward</h2>
+    <form method="POST" action="/forwards" class="grid grid-cols-2 gap-3 text-sm">
+        <input type="hidden" name="csrf" value="{{.Session.CSRFToken}}">
+        <div class="col-span-2">
+            <label class="block text-xs text-slate-400 mb-1">Name</label>
+            <input name="name" required class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2" value="{{.Data.Form.Name}}">
+        </div>
+        <div>
+            <label class="block text-xs text-slate-400 mb-1">Protocol</label>
+            <select name="proto" class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2">
+                <option value="tcp" {{if eq .Data.Form.Proto "tcp"}}selected{{end}}>TCP</option>
+                <option value="udp" {{if eq .Data.Form.Proto "udp"}}selected{{end}}>UDP</option>
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs text-slate-400 mb-1">Public port (gateway)</label>
+            <input type="number" name="public_port" required min="1" max="65535" value="{{if .Data.Form.PublicPort}}{{.Data.Form.PublicPort}}{{end}}"
+                   class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2">
+        </div>
+        <div>
+            <label class="block text-xs text-slate-400 mb-1">Target node</label>
+            <select name="node_id" required class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2">
+                <option value="">— select —</option>
+                {{range .Data.Nodes}}
+                    <option value="{{.ID}}" {{if eq $.Data.Form.NodeID .ID}}selected{{end}}>{{.Name}} ({{.WGIP}})</option>
+                {{end}}
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs text-slate-400 mb-1">Target port (on node)</label>
+            <input type="number" name="target_port" required min="1" max="65535" value="{{if .Data.Form.TargetPort}}{{.Data.Form.TargetPort}}{{end}}"
+                   class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2">
+        </div>
+        <div class="col-span-2">
+            <label class="block text-xs text-slate-400 mb-1">Description</label>
+            <input name="description" value="{{.Data.Form.Description}}"
+                   class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2">
+        </div>
+        <div>
+            <label class="block text-xs text-slate-400 mb-1">Logging</label>
+            <select name="log_mode" class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2">
+                <option value="counter">counter only (default)</option>
+                <option value="connlog">log new connections</option>
+                <option value="debug">debug capture on demand</option>
+            </select>
+        </div>
+        <div class="col-span-2 flex items-center justify-between pt-2">
+            <label class="text-xs text-slate-400">
+                <input type="checkbox" name="confirm_warn" value="1"> confirm warnings
+            </label>
+            <button class="bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded px-3 py-2">
+                Save forward
+            </button>
+        </div>
+    </form>
+</div>
+{{end}}

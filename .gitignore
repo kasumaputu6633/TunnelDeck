@@ -1,0 +1,33 @@
+# binaries
+/tunneldeck
+/tunneldeck.exe
+/dist/
+
+# state / runtime
+/_tmpstate/
+*.db
+*.db-wal
+*.db-shm
+/var/
+/etc/tunneldeck/
+
+# go
+/vendor/
+*.test
+*.out
+coverage.txt
+profile.cov
+
+# editor / tooling
+.vscode/
+.idea/
+.claude/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# env
+.env
+.env.*
+!.env.example

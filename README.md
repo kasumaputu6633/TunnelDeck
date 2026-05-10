@@ -1,0 +1,83 @@
+# TunnelDeck
+
+Self-hosted control plane for a WireGuard + nftables DNAT gateway.
+
+Route public traffic from a VPS to home/backend servers through a WireGuard tunnel, with port forwards managed from a web UI. The data plane stays in the Linux kernel (nftables DNAT → WireGuard) so latency stays low enough for game servers.
+
+**Status:** MVP in development. Not yet production-ready.
+
+## What it does
+
+- **Gateway**: the public VPS. Owns WireGuard server, nftables DNAT, web UI, SQLite DB.
+- **Node**: a home/backend server connected to the gateway over WireGuard. No public IP needed.
+- **Forward**: a rule mapping `gateway_public:port` → `node_wg_ip:port` via nftables DNAT.
+
+TunnelDeck is **only the control plane**. Traffic never goes through the Go process.
+
+## Install
+
+**On your VPS (gateway):**
+
+```bash
+curl -fsSL https://github.com/tunneldeck/tunneldeck/releases/latest/download/install.sh | sudo bash
+```
+
+The installer detects any existing WireGuard/nftables state, prints a summary, recommends a mode, and asks you to confirm. The binary is downloaded from the same GitHub release.
+
+**From your laptop (connect to the UI):**
+
+```bash
+ssh -L 9443:127.0.0.1:9443 user@your-vps
+# then open http://127.0.0.1:9443
+```
+
+The first-run admin password is printed once in the service log:
+
+```bash
+sudo journalctl -u tunneldeck | grep -A1 first-run
+```
+
+## Install modes
+
+Two ways to install:
+
+1. **Interactive** (recommended). Run `sudo bash install.sh` with no flags. The installer inspects the host (wg interfaces, nft tables, DNAT rules, `wg0.conf`, `ip_forward`), prints a summary, recommends a mode, and asks you to confirm.
+2. **Non-interactive** (CI/automation). Pass exactly one mode flag. Add `--yes` to skip confirmation, or `--no-interactive` to fail instead of prompting.
+
+Modes:
+
+- `--fresh` — clean VPS, sets up WireGuard + nftables + systemd.
+- `--adopt` — existing manual setup is detected, imported read-only, and only managed after you confirm in the Web UI.
+- `--monitor-only` — detect and display, never modify.
+
+## Install from source (developers)
+
+```bash
+git clone https://github.com/tunneldeck/tunneldeck
+cd tunneldeck
+GOOS=linux GOARCH=amd64 go build -o tunneldeck ./cmd/tunneldeck
+scp tunneldeck scripts/install.sh user@your-vps:~/
+ssh user@your-vps 'sudo bash install.sh --binary ./tunneldeck'
+```
+
+## Safety rules
+
+- Never flushes the global nftables ruleset. Manages a dedicated table only.
+- Always backs up `/etc/wireguard/wg0.conf` and `/etc/nftables.conf` before touching them.
+- Validates every nft change with `nft -c -f` before applying.
+- Binds the web UI to `127.0.0.1:9443` by default. Access via `ssh -L 9443:127.0.0.1:9443 user@vps`.
+- Warns before forwarding protected ports (SSH, WG, UI, common DB ports).
+
+## Stack
+
+Go, SQLite (pure-Go driver), chi router, server-rendered templates + HTMX + Tailwind, systemd.
+
+## CLI
+
+```
+tunneldeck serve
+tunneldeck doctor
+tunneldeck inspect
+tunneldeck adopt
+tunneldeck status
+```

@@ -1,0 +1,57 @@
+{{define "content"}}
+<h1 class="text-lg font-semibold mb-4">Settings</h1>
+
+<form method="POST" action="/settings" class="bg-slate-800 border border-slate-700 rounded-lg p-4 max-w-xl space-y-3">
+    <input type="hidden" name="csrf" value="{{.Session.CSRFToken}}">
+
+    <div>
+        <label class="block text-xs text-slate-400 mb-1">Public IP</label>
+        <input name="public_ip" value="{{.Data.Gateway.PublicIP}}"
+               class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm font-mono">
+    </div>
+
+    <div class="grid grid-cols-2 gap-3">
+        <div>
+            <label class="block text-xs text-slate-400 mb-1">WAN interface</label>
+            <input name="wan_if" value="{{.Data.Gateway.WANIf}}"
+                   class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm font-mono">
+        </div>
+        <div>
+            <label class="block text-xs text-slate-400 mb-1">WireGuard interface</label>
+            <input name="wg_if" value="{{.Data.Gateway.WGIf}}"
+                   class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm font-mono">
+        </div>
+    </div>
+
+    <div class="grid grid-cols-2 gap-3">
+        <div>
+            <label class="block text-xs text-slate-400 mb-1">WireGuard port</label>
+            <input name="wg_port" value="{{.Data.Gateway.WGPort}}" type="number" min="1" max="65535"
+                   class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm font-mono">
+        </div>
+        <div>
+            <label class="block text-xs text-slate-400 mb-1">WireGuard subnet</label>
+            <input name="wg_subnet" value="{{.Data.Gateway.WGSubnet}}"
+                   class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm font-mono">
+        </div>
+    </div>
+
+    <div>
+        <label class="block text-xs text-slate-400 mb-1">Managed nftables table</label>
+        <input name="managed_nft_table" value="{{.Data.Gateway.ManagedNFTTable}}"
+               class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm font-mono">
+        <p class="text-xs text-slate-500 mt-1">TunnelDeck owns only this table. Other nftables tables are never touched.</p>
+    </div>
+
+    <div class="text-xs text-slate-400">
+        UI bind: <span class="font-mono">{{.Data.Gateway.UIBind}}:{{.Data.Gateway.UIPort}}</span> ·
+        adopt mode: <span class="font-mono">{{.Data.Gateway.AdoptMode}}</span>
+    </div>
+
+    <div class="pt-2">
+        <button class="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded px-3 py-2">
+            Save
+        </button>
+    </div>
+</form>
+{{end}}

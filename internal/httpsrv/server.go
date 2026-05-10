@@ -1,0 +1,134 @@
+// Package httpsrv wires the Web UI: router, middleware, templates, handlers.
+package httpsrv
+
+import (
+	"embed"
+	"html/template"
+	"io/fs"
+	"net/http"
+	"strings"
+
+	"github.com/go-chi/chi/v5"
+	chimw "github.com/go-chi/chi/v5/middleware"
+
+	"github.com/tunneldeck/tunneldeck/internal/auth"
+	"github.com/tunneldeck/tunneldeck/internal/db"
+	"github.com/tunneldeck/tunneldeck/internal/nft"
+	"github.com/tunneldeck/tunneldeck/internal/sysexec"
+)
+
+//go:embed templates/*
+var templatesFS embed.FS
+
+//go:embed static/*
+var staticFS embed.FS
+
+type Deps struct {
+	DB     *db.DB
+	Auth   *auth.Service
+	NFT    nft.Client
+	Runner sysexec.Runner
+	// TLSOn controls whether the session cookie sets Secure.
+	TLSOn bool
+	// DryRunNFT, when true, renders nftables changes but never applies them.
+	DryRunNFT bool
+}
+
+// Server holds the router plus a per-page template map. One template tree per
+// page lets multiple pages each define "content" without colliding.
+type Server struct {
+	Router    *chi.Mux
+	Templates map[string]*template.Template
+	Deps      Deps
+}
+
+type contextKey int
+
+const ctxSession contextKey = 1
+
+// New builds a Server with routes and middleware wired up.
+func New(deps Deps) (*Server, error) {
+	tmpls, err := parseTemplates()
+	if err != nil {
+		return nil, err
+	}
+	s := &Server{Deps: deps, Templates: tmpls}
+
+	r := chi.NewRouter()
+	r.Use(chimw.Recoverer)
+	r.Use(chimw.RequestID)
+	r.Use(chimw.RealIP)
+	r.Use(s.sessionMW)
+
+	sub, _ := fs.Sub(staticFS, "static")
+	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.FS(sub))))
+
+	r.Get("/login", s.getLogin)
+	r.Post("/login", s.postLogin)
+	r.Post("/logout", s.postLogout)
+	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
+
+	r.Group(func(gr chi.Router) {
+		gr.Use(s.requireAuth)
+		gr.Use(s.csrfMW)
+
+		gr.Get("/", s.dashboard)
+		gr.Get("/nodes", s.listNodes)
+		gr.Post("/nodes", s.createNode)
+		gr.Post("/nodes/{id}/delete", s.deleteNode)
+
+		gr.Get("/forwards", s.listForwards)
+		gr.Post("/forwards", s.createForward)
+		gr.Post("/forwards/{id}/toggle", s.toggleForward)
+		gr.Post("/forwards/{id}/delete", s.deleteForward)
+		gr.Post("/forwards/apply", s.applyForwards)
+
+		gr.Get("/inspect", s.getInspect)
+		gr.Post("/adopt", s.postAdopt)
+
+		gr.Get("/logs", s.logs)
+		gr.Get("/settings", s.getSettings)
+		gr.Post("/settings", s.postSettings)
+	})
+
+	s.Router = r
+	return s, nil
+}
+
+func parseTemplates() (map[string]*template.Template, error) {
+	funcs := template.FuncMap{
+		"hasPrefix": func(s, prefix string) bool {
+			return len(s) >= len(prefix) && s[:len(prefix)] == prefix
+		},
+	}
+
+	baseBytes, err := templatesFS.ReadFile("templates/_base.html")
+	if err != nil {
+		return nil, err
+	}
+
+	entries, err := templatesFS.ReadDir("templates")
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]*template.Template{}
+	for _, e := range entries {
+		if e.IsDir() || e.Name() == "_base.html" || !strings.HasSuffix(e.Name(), ".html") {
+			continue
+		}
+		pageBytes, err := templatesFS.ReadFile("templates/" + e.Name())
+		if err != nil {
+			return nil, err
+		}
+		t, err := template.New(e.Name()).Funcs(funcs).Parse(string(baseBytes))
+		if err != nil {
+			return nil, err
+		}
+		if _, err := t.Parse(string(pageBytes)); err != nil {
+			return nil, err
+		}
+		name := strings.TrimSuffix(e.Name(), ".html")
+		out[name] = t
+	}
+	return out, nil
+}

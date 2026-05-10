@@ -1,0 +1,26 @@
+{{define "login"}}{{template "base" .}}{{end}}
+
+{{define "content"}}
+<div class="max-w-sm mx-auto mt-16 bg-slate-800 border border-slate-700 rounded-lg p-6">
+    <h1 class="text-xl font-semibold mb-1">Sign in</h1>
+    <p class="text-sm text-slate-400 mb-4">TunnelDeck control plane</p>
+
+    {{if .Error}}<div class="mb-3 text-sm text-red-300">{{.Error}}</div>{{end}}
+
+    <form method="POST" action="/login" class="space-y-3">
+        <div>
+            <label class="block text-xs text-slate-400 mb-1">Username</label>
+            <input name="username" autocomplete="username" required
+                   class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm">
+        </div>
+        <div>
+            <label class="block text-xs text-slate-400 mb-1">Password</label>
+            <input name="password" type="password" autocomplete="current-password" required
+                   class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm">
+        </div>
+        <button class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded px-3 py-2 text-sm">
+            Sign in
+        </button>
+    </form>
+</div>
+{{end}}

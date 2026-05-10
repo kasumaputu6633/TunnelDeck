@@ -1,0 +1,65 @@
+{{define "content"}}
+<div class="flex items-center justify-between mb-4">
+    <h1 class="text-lg font-semibold">Nodes</h1>
+    <span class="text-xs text-slate-400">Gateway: {{.Data.Gateway.WGIP}} · subnet {{.Data.Gateway.WGSubnet}}</span>
+</div>
+
+<div class="bg-slate-800 border border-slate-700 rounded-lg overflow-hidden mb-6">
+    <table class="w-full text-sm">
+        <thead class="text-xs text-slate-400 bg-slate-900">
+            <tr>
+                <th class="text-left px-3 py-2">Name</th>
+                <th class="text-left px-3 py-2">WG IP</th>
+                <th class="text-left px-3 py-2">Status</th>
+                <th class="text-left px-3 py-2">Handshake</th>
+                <th class="text-right px-3 py-2">RX / TX</th>
+                <th class="px-3 py-2"></th>
+            </tr>
+        </thead>
+        <tbody>
+        {{range .Data.Nodes}}
+            <tr class="border-t border-slate-700">
+                <td class="px-3 py-2">
+                    {{.Node.Name}}
+                    {{if .Node.Adopted}}<span class="ml-1 text-[10px] uppercase px-1 rounded bg-slate-700">adopted</span>{{end}}
+                </td>
+                <td class="px-3 py-2 font-mono">{{.Node.WGIP}}</td>
+                <td class="px-3 py-2">
+                    {{if .Online}}<span class="text-emerald-400">online</span>
+                    {{else}}<span class="text-slate-400">offline</span>{{end}}
+                </td>
+                <td class="px-3 py-2 text-slate-400">{{if .LatestHS}}{{.LatestHS}}{{else}}—{{end}}</td>
+                <td class="px-3 py-2 text-right text-slate-300 font-mono">{{.RxBytes}} / {{.TxBytes}}</td>
+                <td class="px-3 py-2 text-right">
+                    <form method="POST" action="/nodes/{{.Node.ID}}/delete" onsubmit="return confirm('Delete node {{.Node.Name}}?')">
+                        <input type="hidden" name="csrf" value="{{$.Session.CSRFToken}}">
+                        <button class="text-xs text-red-400 hover:text-red-300">delete</button>
+                    </form>
+                </td>
+            </tr>
+        {{else}}
+            <tr><td colspan="6" class="text-center text-slate-400 py-6">No nodes yet.</td></tr>
+        {{end}}
+        </tbody>
+    </table>
+</div>
+
+<div class="bg-slate-800 border border-slate-700 rounded-lg p-4 max-w-xl">
+    <h2 class="text-sm font-semibold mb-3">Add node</h2>
+    <p class="text-xs text-slate-400 mb-3">Next available WG IP: <span class="font-mono">{{.Data.NextIP}}</span></p>
+    <form method="POST" action="/nodes" class="space-y-3">
+        <input type="hidden" name="csrf" value="{{.Session.CSRFToken}}">
+        <div>
+            <label class="block text-xs text-slate-400 mb-1">Name</label>
+            <input name="name" required class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm" placeholder="home-lab">
+        </div>
+        <button class="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded px-3 py-2">
+            Allocate & create
+        </button>
+    </form>
+    <div class="mt-4 text-xs text-slate-400">
+        After creating, set up the node with a matching WireGuard config pointing at
+        <span class="font-mono">{{.Data.Gateway.PublicIP}}:{{.Data.Gateway.WGPort}}</span>.
+    </div>
+</div>
+{{end}}

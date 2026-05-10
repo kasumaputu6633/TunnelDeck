@@ -1,0 +1,70 @@
+{{define "content"}}
+<div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+    <div class="bg-slate-800 border border-slate-700 rounded-lg p-4">
+        <div class="text-xs uppercase text-slate-400">Gateway</div>
+        <div class="text-lg font-semibold">{{with .Data.Gateway.PublicIP}}{{.}}{{else}}<span class="text-slate-500">unknown</span>{{end}}</div>
+        <div class="text-xs text-slate-400 mt-1">{{.Data.Gateway.WGIf}} → {{.Data.Gateway.WGIP}}</div>
+        <div class="text-xs text-slate-400">WAN: {{.Data.Gateway.WANIf}} · WG :{{.Data.Gateway.WGPort}}</div>
+        <div class="mt-2 inline-block text-[10px] uppercase px-2 py-0.5 rounded bg-slate-700 text-slate-200">mode: {{.Data.Gateway.AdoptMode}}</div>
+    </div>
+    <div class="bg-slate-800 border border-slate-700 rounded-lg p-4">
+        <div class="text-xs uppercase text-slate-400">Nodes</div>
+        <div class="text-lg font-semibold">{{.Data.OnlineCount}} / {{.Data.NodeCount}} online</div>
+        <div class="text-xs text-slate-400 mt-1">handshake ≤ {{.Data.OnlineWindow}}s</div>
+    </div>
+    <div class="bg-slate-800 border border-slate-700 rounded-lg p-4">
+        <div class="text-xs uppercase text-slate-400">Forwards</div>
+        <div class="text-lg font-semibold">{{.Data.EnabledCount}} / {{.Data.ForwardCount}} enabled</div>
+        <div class="text-xs text-slate-400 mt-1">nft table: {{.Data.Gateway.ManagedNFTTable}}</div>
+    </div>
+    <div class="bg-slate-800 border border-slate-700 rounded-lg p-4">
+        <div class="text-xs uppercase text-slate-400">Traffic (wg)</div>
+        <div class="text-lg font-semibold">↓ {{.Data.TotalRx}}B · ↑ {{.Data.TotalTx}}B</div>
+        <div class="text-xs text-slate-400 mt-1">sum across peers</div>
+    </div>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div class="bg-slate-800 border border-slate-700 rounded-lg p-4">
+        <h2 class="text-sm font-semibold text-slate-200 mb-3">WireGuard peers</h2>
+        {{if .Data.WGPeers}}
+        <table class="w-full text-sm">
+            <thead class="text-xs text-slate-400"><tr>
+                <th class="text-left py-1">Allowed IP</th>
+                <th class="text-left">Handshake</th>
+                <th class="text-right">RX</th>
+                <th class="text-right">TX</th>
+            </tr></thead>
+            <tbody>
+            {{range .Data.WGPeers}}
+                <tr class="border-t border-slate-700">
+                    <td class="py-1">{{range .AllowedIPs}}{{.}} {{end}}</td>
+                    <td>{{if .LatestHandshakeUnix}}{{.LatestHandshakeUnix}}{{else}}<span class="text-slate-500">never</span>{{end}}</td>
+                    <td class="text-right">{{.RxBytes}}</td>
+                    <td class="text-right">{{.TxBytes}}</td>
+                </tr>
+            {{end}}
+            </tbody>
+        </table>
+        {{else}}
+        <div class="text-sm text-slate-400">No live peer data. The `wg` command isn't available or the interface is down.</div>
+        {{end}}
+    </div>
+
+    <div class="bg-slate-800 border border-slate-700 rounded-lg p-4">
+        <h2 class="text-sm font-semibold text-slate-200 mb-3">Recent audit log</h2>
+        {{if .Data.RecentAudit}}
+        <ul class="text-xs space-y-1">
+        {{range .Data.RecentAudit}}
+            <li><span class="text-slate-500">{{.TS.Format "2006-01-02 15:04:05"}}</span>
+                <span class="text-slate-300">{{.Actor}}</span>
+                <span class="text-emerald-300">{{.Action}}</span>
+                <span class="text-slate-400">{{.Target}}</span></li>
+        {{end}}
+        </ul>
+        {{else}}
+        <div class="text-sm text-slate-400">No audit entries yet.</div>
+        {{end}}
+    </div>
+</div>
+{{end}}
