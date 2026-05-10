@@ -30,7 +30,7 @@
     <table class="w-full text-sm">
         <thead class="text-xs text-slate-400"><tr>
             <th class="text-left py-1">Allowed IPs</th>
-            <th class="text-left">Last handshake (unix)</th>
+            <th class="text-left">Last handshake</th>
             <th class="text-right">RX</th>
             <th class="text-right">TX</th>
         </tr></thead>
@@ -38,9 +38,9 @@
         {{range .Data.Report.WGPeers}}
             <tr class="border-t border-slate-700">
                 <td class="py-1 font-mono">{{range .AllowedIPs}}{{.}} {{end}}</td>
-                <td>{{.LatestHandshakeUnix}}</td>
-                <td class="text-right">{{.RxBytes}}</td>
-                <td class="text-right">{{.TxBytes}}</td>
+                <td>{{formatHandshake .LatestHandshakeUnix}}</td>
+                <td class="text-right">{{formatBytes .RxBytes}}</td>
+                <td class="text-right">{{formatBytes .TxBytes}}</td>
             </tr>
         {{end}}
         </tbody>

@@ -107,6 +107,8 @@ func parseTemplates() (map[string]*template.Template, error) {
 			}
 			return s
 		},
+		"formatBytes":     formatBytes,
+		"formatHandshake": formatHandshake,
 	}
 
 	baseBytes, err := templatesFS.ReadFile("templates/_base.html")

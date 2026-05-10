@@ -19,7 +19,7 @@
     </div>
     <div class="bg-slate-800 border border-slate-700 rounded-lg p-4">
         <div class="text-xs uppercase text-slate-400">Traffic (wg)</div>
-        <div class="text-lg font-semibold">↓ {{.Data.TotalRx}}B · ↑ {{.Data.TotalTx}}B</div>
+        <div class="text-lg font-semibold">↓ {{formatBytes .Data.TotalRx}} · ↑ {{formatBytes .Data.TotalTx}}</div>
         <div class="text-xs text-slate-400 mt-1">sum across peers</div>
     </div>
 </div>
@@ -39,9 +39,9 @@
             {{range .Data.WGPeers}}
                 <tr class="border-t border-slate-700">
                     <td class="py-1">{{range .AllowedIPs}}{{.}} {{end}}</td>
-                    <td>{{if .LatestHandshakeUnix}}{{.LatestHandshakeUnix}}{{else}}<span class="text-slate-500">never</span>{{end}}</td>
-                    <td class="text-right">{{.RxBytes}}</td>
-                    <td class="text-right">{{.TxBytes}}</td>
+                    <td>{{formatHandshake .LatestHandshakeUnix}}</td>
+                    <td class="text-right">{{formatBytes .RxBytes}}</td>
+                    <td class="text-right">{{formatBytes .TxBytes}}</td>
                 </tr>
             {{end}}
             </tbody>

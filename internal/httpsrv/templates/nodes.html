@@ -29,7 +29,7 @@
                     {{else}}<span class="text-slate-400">offline</span>{{end}}
                 </td>
                 <td class="px-3 py-2 text-slate-400">{{if .LatestHS}}{{.LatestHS}}{{else}}—{{end}}</td>
-                <td class="px-3 py-2 text-right text-slate-300 font-mono">{{.RxBytes}} / {{.TxBytes}}</td>
+                <td class="px-3 py-2 text-right text-slate-300 font-mono">{{formatBytes .RxBytes}} / {{formatBytes .TxBytes}}</td>
                 <td class="px-3 py-2 text-right">
                     <form method="POST" action="/nodes/{{.Node.ID}}/delete" onsubmit="return confirm('Delete node {{.Node.Name}}?')">
                         <input type="hidden" name="csrf" value="{{$.Session.CSRFToken}}">
