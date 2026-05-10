@@ -36,6 +36,7 @@ set -euo pipefail
 # --- Defaults --------------------------------------------------------------
 
 MODE=""
+MODE_FROM_FLAG="no"
 BIND="127.0.0.1"
 PORT="9443"
 STATE_DIR="/var/lib/tunneldeck"
@@ -53,9 +54,9 @@ ALLOW_INTERACTIVE="yes"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --fresh)          MODE="fresh"; shift ;;
-        --adopt)          MODE="adopt"; shift ;;
-        --monitor-only)   MODE="monitor-only"; shift ;;
+        --fresh)          MODE="fresh"; MODE_FROM_FLAG="yes"; shift ;;
+        --adopt)          MODE="adopt"; MODE_FROM_FLAG="yes"; shift ;;
+        --monitor-only)   MODE="monitor-only"; MODE_FROM_FLAG="yes"; shift ;;
         --bind)           BIND="$2"; shift 2 ;;
         --port)           PORT="$2"; shift 2 ;;
         --binary)         BIN_SOURCE="$2"; shift 2 ;;
@@ -175,10 +176,15 @@ choose_mode_interactive() {
     esac
 }
 
-# Confirm before running a destructive mode. No-op for monitor-only.
+# Confirm before running a destructive mode. Skipped for monitor-only,
+# when -y was passed, when stdin isn't a TTY (curl|bash can't prompt),
+# or when the mode was passed explicitly via CLI flag — an explicit flag
+# is itself the user's confirmation.
 confirm_mode() {
     [[ "$ASSUME_YES" == "yes" ]] && return 0
     [[ "$MODE" == "monitor-only" ]] && return 0
+    [[ "$MODE_FROM_FLAG" == "yes" ]] && return 0
+    [[ ! -t 0 ]] && return 0
 
     local warn=""
     if [[ "$MODE" == "fresh" ]]; then
