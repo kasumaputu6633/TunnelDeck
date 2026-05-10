@@ -335,16 +335,41 @@ EOF
 systemctl daemon-reload
 systemctl enable --now tunneldeck.service
 
+# Grab the one-time admin password from the service log. On first boot
+# TunnelDeck prints a "=== TunnelDeck first-run ===" block to stdout,
+# which systemd captures. We wait up to ~5s for it to appear.
+ADMIN_PASSWORD=""
+for _ in 1 2 3 4 5; do
+    ADMIN_PASSWORD=$(journalctl -u tunneldeck.service --no-pager 2>/dev/null \
+        | awk '/^password:/ { print $2; exit }')
+    [[ -n "$ADMIN_PASSWORD" ]] && break
+    sleep 1
+done
+
 echo
 echo "=> done"
 echo "   mode:        $MODE"
 echo "   UI:          http://${BIND}:${PORT}"
 if [[ "$BIND" == "127.0.0.1" || "$BIND" == "localhost" ]]; then
     echo "   tunnel in:   ssh -L ${PORT}:127.0.0.1:${PORT} <user>@<this-host>"
+    echo "                then open http://127.0.0.1:${PORT} in your laptop's browser"
 else
     echo "   WARNING:     UI is not bound to localhost. Ensure this address is not publicly reachable."
 fi
-echo "   first-run admin password is in:  journalctl -u tunneldeck | grep -A1 first-run"
+
+if [[ -n "$ADMIN_PASSWORD" ]]; then
+    echo
+    echo "   ================ first-run admin credentials ================"
+    echo "   username: admin"
+    echo "   password: $ADMIN_PASSWORD"
+    echo "   Save this now; it won't be displayed again."
+    echo "   =============================================================="
+else
+    # Fallback if we couldn't read the log (service still starting, journald
+    # not populated yet, custom logging setup, etc).
+    echo "   admin password (if first run): journalctl -u tunneldeck | grep -A1 first-run"
+fi
+
 echo
 if [[ "$MODE" == "adopt" ]]; then
     echo "   next: open the Web UI and visit /inspect to review detected state before clicking 'Adopt & manage'."
