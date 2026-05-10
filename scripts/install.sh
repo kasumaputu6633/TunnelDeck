@@ -232,6 +232,16 @@ confirm_mode
 # --- Install --------------------------------------------------------------
 
 echo "=> installing dependencies (only missing packages)"
+# NOTE: any command the TunnelDeck binary shells out to at runtime must be
+# listed here. Current call sites (internal/*/*.go → sysexec.Runner.Run):
+#   wg, wg-quick          → wireguard, wireguard-tools
+#   nft                   → nftables
+#   conntrack             → conntrack (needed to flush sessions on forward
+#                           disable/delete so existing flows actually drop)
+#   ip                    → iproute2
+#   ping                  → iputils-ping
+#   curl (install only)   → typically preinstalled; ca-certificates for TLS
+# If you add a new runtime command, add its package here too.
 REQUIRED=(wireguard wireguard-tools nftables conntrack iproute2 iputils-ping ca-certificates)
 MISSING=()
 for p in "${REQUIRED[@]}"; do
