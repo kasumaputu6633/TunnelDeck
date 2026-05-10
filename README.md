@@ -54,8 +54,43 @@ ssh -L 9443:127.0.0.1:9443 user@your-vps
 The first-run admin password is printed once in the service log:
 
 ```bash
-sudo journalctl -u tunneldeck | grep -A1 first-run
+sudo journalctl -u tunneldeck | grep -A5 first-run
 ```
+
+## After install — adopt the existing setup
+
+The `--adopt` flag at install time only enables pre-install file backups and monitor-friendly defaults. The actual import of your existing WireGuard peers and nftables DNAT rules happens through the Web UI so you can review what will be imported first.
+
+Once logged in:
+
+1. Open the **Inspect** page. You'll see detected peers, nft tables, and DNAT rules.
+2. Verify the list matches what you expect.
+3. Under **Adopt & manage**, pick `reuse existing table` (recommended when DNAT rules are detected) and click the orange **Adopt & manage** button.
+4. Dashboard will switch to `MODE: ADOPTED`; Nodes and Forwards pages will populate from the imported state.
+
+## Accessing the Web UI from outside the VPS
+
+The UI binds to `127.0.0.1:9443` by default. You have two options:
+
+**Option A — SSH tunnel (recommended, no TLS needed):**
+
+```bash
+ssh -L 9443:127.0.0.1:9443 user@your-vps
+# then open http://127.0.0.1:9443 in your laptop's browser
+# keep the SSH window open while you use the UI
+```
+
+**Option B — public bind (simpler, but weaker without TLS):**
+
+Edit the systemd unit and replace the bind address:
+
+```bash
+sudo sed -i 's|--bind 127.0.0.1|--bind 0.0.0.0|' /etc/systemd/system/tunneldeck.service
+sudo systemctl daemon-reload
+sudo systemctl restart tunneldeck
+```
+
+Then open `http://<your-vps-ip>:9443`. The UI is still protected by login, rate-limited, and CSRF-guarded — but HTTP traffic is unencrypted, so do this only if your VPS provider firewall allows 9443 and you're OK with bootstrap traffic being plaintext until TLS lands in a later release.
 
 ## Install modes
 

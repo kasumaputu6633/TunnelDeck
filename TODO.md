@@ -159,6 +159,19 @@ When install.sh detects an existing install:
 - If /etc/tunneldeck/settings has changed schema: run migrations.
 - If systemd unit changed: show diff, let user accept.
 
+### `--adopt` should auto-run adoption on first boot
+
+Today `install.sh --adopt` only affects pre-install backup behaviour
+and the systemd flag for monitor-only mode. The actual adoption
+(importing peers and DNAT rules into the DB) still requires clicking
+"Adopt & manage" in the Web UI. That's a surprise for users who
+expect the flag to do what it says.
+
+Possible shape: the installer writes `ADOPT_ON_FIRST_BOOT=1` to the
+state dir, and `tunneldeck serve` on first boot runs the adopt flow
+automatically before the Web UI opens. Keep the UI flow too for users
+who want to review first.
+
 ### Non-systemd systems
 
 Support OpenRC (Alpine) and runit (Void). Same template, different
