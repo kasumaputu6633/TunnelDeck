@@ -240,6 +240,13 @@ func pickAssetForHost(assets []Asset) *Asset {
 // fetchSHA256SumFor pulls SHA256SUMS.txt from the release and returns the
 // expected sha256 for the given asset name. Returns "" without error if
 // the file exists but doesn't list the asset.
+//
+// NOTE on cache-busting: GitHub's releases/latest/download/<name> URLs
+// (and even the asset browser_download_url) go through an aggressive
+// CDN. When an asset is replaced on an existing release, clients can
+// see the old file for minutes. We mitigate two ways:
+//   - Append a cache-buster query to the URL so edge caches miss.
+//   - Send Cache-Control: no-cache on our request.
 func fetchSHA256SumFor(ctx context.Context, assets []Asset, name string) (string, error) {
 	var sumAsset *Asset
 	for i := range assets {
@@ -251,11 +258,14 @@ func fetchSHA256SumFor(ctx context.Context, assets []Asset, name string) (string
 	if sumAsset == nil {
 		return "", errors.New("SHA256SUMS.txt not attached to release")
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, sumAsset.BrowserDownloadURL, nil)
+	url := cacheBust(sumAsset.BrowserDownloadURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set("User-Agent", "tunneldeck-updater")
+	req.Header.Set("Cache-Control", "no-cache")
+	req.Header.Set("Pragma", "no-cache")
 	resp, err := newHTTPClient().Do(req)
 	if err != nil {
 		return "", err
@@ -269,6 +279,16 @@ func fetchSHA256SumFor(ctx context.Context, assets []Asset, name string) (string
 		return "", err
 	}
 	return parseSHA256SumsFor(string(body), name), nil
+}
+
+// cacheBust appends ?_cb=<unix-nano> (or &_cb=... if a query already
+// exists) so every request looks unique to edge caches.
+func cacheBust(u string) string {
+	sep := "?"
+	if strings.Contains(u, "?") {
+		sep = "&"
+	}
+	return fmt.Sprintf("%s%s_cb=%d", u, sep, time.Now().UnixNano())
 }
 
 // parseSHA256SumsFor reads `sha256sum` output format — "<hex>  name" or
@@ -305,11 +325,13 @@ func sha256File(path string) (string, error) {
 }
 
 func downloadTo(ctx context.Context, url, dest string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, cacheBust(url), nil)
 	if err != nil {
 		return err
 	}
 	req.Header.Set("User-Agent", "tunneldeck-updater")
+	req.Header.Set("Cache-Control", "no-cache")
+	req.Header.Set("Pragma", "no-cache")
 	resp, err := newHTTPClient().Do(req)
 	if err != nil {
 		return err
