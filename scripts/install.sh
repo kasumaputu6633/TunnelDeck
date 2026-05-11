@@ -333,7 +333,7 @@ RestartSec=2
 # We need root for wg/nft. Tight process sandbox, but no user= drop,
 # because those tools require CAP_NET_ADMIN.
 ProtectSystem=strict
-ReadWritePaths=${STATE_DIR} ${LOG_DIR} /etc/wireguard /etc/nftables.conf
+ReadWritePaths=${STATE_DIR} ${LOG_DIR} /etc/wireguard /etc/nftables.conf /usr/local/bin
 ProtectHome=yes
 PrivateTmp=yes
 NoNewPrivileges=yes
