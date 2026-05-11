@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -28,6 +29,7 @@ import (
 	"github.com/kasumaputu6633/tunneldeck/internal/inspect"
 	"github.com/kasumaputu6633/tunneldeck/internal/nft"
 	"github.com/kasumaputu6633/tunneldeck/internal/sysexec"
+	"github.com/kasumaputu6633/tunneldeck/internal/updater"
 )
 
 var version = "0.1.0-dev"
@@ -48,6 +50,8 @@ func main() {
 		runInspect()
 	case "status":
 		runStatus()
+	case "update":
+		runUpdate(args)
 	case "version", "-v", "--version":
 		fmt.Println("tunneldeck", version)
 	case "help", "-h", "--help":
@@ -70,6 +74,7 @@ commands:
   doctor   run diagnostic checks
   inspect  print detected host state as JSON
   status   one-line status (for scripts)
+  update   download and install the latest release from GitHub
   version  print version`)
 }
 
@@ -133,16 +138,19 @@ func runServe(args []string) {
 
 	runner := sysexec.ExecRunner{}
 	server, err := httpsrv.New(httpsrv.Deps{
-		DB:        database,
-		Auth:      authSvc,
-		NFT:       nft.Client{Runner: runner},
-		Runner:    runner,
-		TLSOn:     false,
-		DryRunNFT: *dryNFT,
+		DB:         database,
+		Auth:       authSvc,
+		NFT:        nft.Client{Runner: runner},
+		Runner:     runner,
+		TLSOn:      false,
+		DryRunNFT:  *dryNFT,
+		UpdateRepo: "kasumaputu6633/tunneldeck",
+		Version:    version,
 	})
 	if err != nil {
 		die("build server: ", err)
 	}
+	server.StartBackgroundChecks(ctx)
 
 	addr := fmt.Sprintf("%s:%d", uiBind, uiPort)
 	httpSrv := &http.Server{
@@ -196,6 +204,89 @@ func runStatus() {
 	rep := inspect.Host{Runner: runner, ReadFile: os.ReadFile}.Run(ctx)
 	fmt.Printf("wg=%s peers=%d nft_tables=%d ip_forward=%v\n",
 		rep.WGPrimary, len(rep.WGPeers), len(rep.NFTTables), rep.IPForward)
+}
+
+// runUpdate implements `tunneldeck update`.
+//
+// Flags:
+//
+//	--check          only print whether an update is available, don't apply
+//	--force          apply even if Check() says we're up-to-date
+//	--repo owner/n   override the release source (default: kasumaputu6633/tunneldeck)
+//	--binary path    override the binary path to replace (default: argv[0])
+//	--no-restart     skip `systemctl restart tunneldeck` after swap
+//
+// Exit codes:
+//
+//	0 — up to date, or update applied successfully
+//	1 — check or apply failed
+//	2 — (with --check) update is available
+func runUpdate(args []string) {
+	fs := flag.NewFlagSet("update", flag.ExitOnError)
+	checkOnly := fs.Bool("check", false, "only check, don't apply")
+	force := fs.Bool("force", false, "apply even if Check reports up-to-date")
+	repo := fs.String("repo", "kasumaputu6633/tunneldeck", "GitHub repo owner/name")
+	binaryPath := fs.String("binary", "", "path to binary to replace (default: current)")
+	noRestart := fs.Bool("no-restart", false, "don't systemctl restart tunneldeck after swap")
+	_ = fs.Parse(args)
+
+	if *binaryPath == "" {
+		p, err := os.Executable()
+		if err != nil {
+			die("resolve current binary: ", err)
+		}
+		*binaryPath = p
+	}
+
+	ctx, cancel := signalContext()
+	defer cancel()
+
+	status := updater.Check(ctx, *repo, *binaryPath, version)
+	fmt.Printf("current: %s (sha %s)\n", status.CurrentVersion, shortSHA(status.CurrentSHA))
+	fmt.Printf("remote:  %s (sha %s, published %s)\n",
+		status.RemoteTag, shortSHA(status.RemoteSHA),
+		status.RemotePublishedAt.Format("2006-01-02 15:04 MST"))
+	fmt.Println("status: ", status.Reason)
+
+	if *checkOnly {
+		if status.UpdateAvailable {
+			os.Exit(2)
+		}
+		return
+	}
+
+	if !status.UpdateAvailable && !*force {
+		fmt.Println("nothing to do. use --force to re-download anyway.")
+		return
+	}
+
+	fmt.Println("downloading and verifying...")
+	res, err := updater.Apply(ctx, *repo, *binaryPath)
+	if err != nil {
+		die("update failed: ", err)
+	}
+	fmt.Printf("installed new binary: %s (sha %s)\n", res.NewBinaryPath, shortSHA(res.NewSHA))
+	fmt.Printf("previous binary backed up at: %s\n", res.BackupPath)
+
+	if *noRestart {
+		fmt.Println("skipping service restart (--no-restart).")
+		return
+	}
+	runner := sysexec.ExecRunner{}
+	r := runner.Run(ctx, "systemctl", []string{"restart", "tunneldeck"}, "")
+	if r.Err != nil || r.ExitCode != 0 {
+		fmt.Fprintf(os.Stderr, "warning: systemctl restart tunneldeck failed (exit=%d): %s\n", r.ExitCode, strings.TrimSpace(r.Stderr))
+		fmt.Fprintln(os.Stderr, "the new binary is installed; run 'sudo systemctl restart tunneldeck' manually.")
+		return
+	}
+	fmt.Println("service restarted. all done.")
+}
+
+func shortSHA(s string) string {
+	if len(s) < 12 {
+		return s
+	}
+	return s[:12]
 }
 
 func signalContext() (context.Context, context.CancelFunc) {

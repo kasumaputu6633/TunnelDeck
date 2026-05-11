@@ -17,6 +17,7 @@ import (
 	"github.com/kasumaputu6633/tunneldeck/internal/forwards"
 	"github.com/kasumaputu6633/tunneldeck/internal/inspect"
 	"github.com/kasumaputu6633/tunneldeck/internal/nft"
+	"github.com/kasumaputu6633/tunneldeck/internal/updater"
 	"github.com/kasumaputu6633/tunneldeck/internal/wg"
 )
 
@@ -679,4 +680,43 @@ func flashFromQuery(r *http.Request) *Flash {
 		return &Flash{Kind: raw[:i], Text: raw[i+1:]}
 	}
 	return &Flash{Kind: "ok", Text: raw}
+}
+
+// postAdminUpdate downloads the latest release, verifies its SHA256,
+// atomically swaps the binary, and restarts the tunneldeck service.
+//
+// Because the restart pulls the rug out from under the request we can't
+// render a nice response afterward. Instead we run the download + swap
+// synchronously (so SHA mismatch / download errors are visible as a flash
+// message) and fork the restart into a 1s-delayed goroutine, redirecting
+// the user immediately. After restart the banner refreshes on next poll
+// and should disappear.
+func (s *Server) postAdminUpdate(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	if s.Deps.UpdateRepo == "" {
+		http.Redirect(w, r, "/?flash=error:update+not+configured", http.StatusSeeOther)
+		return
+	}
+	binPath, err := os.Executable()
+	if err != nil {
+		http.Redirect(w, r, "/?flash=error:resolve+binary:+"+err.Error(), http.StatusSeeOther)
+		return
+	}
+
+	res, err := updater.Apply(ctx, s.Deps.UpdateRepo, binPath)
+	if err != nil {
+		_ = s.Deps.DB.AuditWrite(ctx, currentActor(r), "update.fail", "", fmt.Sprintf(`{"err":%q}`, err.Error()))
+		http.Redirect(w, r, "/?flash=error:update+failed:+"+err.Error(), http.StatusSeeOther)
+		return
+	}
+	_ = s.Deps.DB.AuditWrite(ctx, currentActor(r), "update.apply", "",
+		fmt.Sprintf(`{"binary":%q,"backup":%q,"sha":%q}`, res.NewBinaryPath, res.BackupPath, res.NewSHA))
+
+	// Fire restart in background so the current response completes first.
+	go func() {
+		time.Sleep(1 * time.Second)
+		_ = s.Deps.Runner.Run(context.Background(), "systemctl", []string{"restart", "tunneldeck"}, "")
+	}()
+
+	http.Redirect(w, r, "/?flash=ok:update+applied;+restarting+service…", http.StatusSeeOther)
 }

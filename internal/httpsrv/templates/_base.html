@@ -32,6 +32,26 @@
     </header>
     {{end}}
 
+    {{if .Update.Available}}
+    <div class="max-w-6xl mx-auto px-4 mt-4">
+        <div class="rounded border border-amber-800 bg-amber-950 text-amber-200 px-3 py-2 text-sm flex items-center gap-3 flex-wrap">
+            <span class="font-semibold">Update available:</span>
+            <span class="font-mono">{{.Update.Tag}}</span>
+            <span class="text-xs text-amber-300/80">— {{.Update.Reason}}</span>
+            <div class="ml-auto flex items-center gap-2">
+                <form method="POST" action="/admin/update"
+                      onsubmit="return confirm('Download the new binary, verify its SHA256, and restart the tunneldeck service?')">
+                    <input type="hidden" name="csrf" value="{{.Update.CSRFToken}}">
+                    <button class="text-xs bg-amber-600 hover:bg-amber-500 text-white font-medium rounded px-2 py-1">
+                        Update now
+                    </button>
+                </form>
+                <code class="text-[10px] text-amber-300/60">sudo tunneldeck update</code>
+            </div>
+        </div>
+    </div>
+    {{end}}
+
     {{if .Flash}}
     <div class="max-w-6xl mx-auto px-4 mt-4">
         <div class="rounded border px-3 py-2 text-sm

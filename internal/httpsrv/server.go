@@ -2,11 +2,16 @@
 package httpsrv
 
 import (
+	"context"
 	"embed"
 	"html/template"
 	"io/fs"
+	"log"
 	"net/http"
+	"os"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
@@ -15,6 +20,7 @@ import (
 	"github.com/kasumaputu6633/tunneldeck/internal/db"
 	"github.com/kasumaputu6633/tunneldeck/internal/nft"
 	"github.com/kasumaputu6633/tunneldeck/internal/sysexec"
+	"github.com/kasumaputu6633/tunneldeck/internal/updater"
 )
 
 //go:embed templates/*
@@ -32,6 +38,12 @@ type Deps struct {
 	TLSOn bool
 	// DryRunNFT, when true, renders nftables changes but never applies them.
 	DryRunNFT bool
+	// UpdateRepo is where the updater polls for releases. Empty string
+	// disables the background check entirely.
+	UpdateRepo string
+	// Version is the build-time version string (main.version). Used by the
+	// update check to compare against GitHub release tags.
+	Version string
 }
 
 // Server holds the router plus a per-page template map. One template tree per
@@ -40,6 +52,66 @@ type Server struct {
 	Router    *chi.Mux
 	Templates map[string]*template.Template
 	Deps      Deps
+
+	// Update-check state. Guarded by updMu. The background goroutine
+	// refreshes lastUpdate every 6 hours; requireAuth middleware reads it
+	// to render the UI banner.
+	updMu      sync.RWMutex
+	lastUpdate updater.Status
+	updateAt   time.Time
+}
+
+// updateStatus returns a snapshot of the most recent update check, safe to
+// consume from any handler.
+func (s *Server) updateStatus() (updater.Status, time.Time) {
+	s.updMu.RLock()
+	defer s.updMu.RUnlock()
+	return s.lastUpdate, s.updateAt
+}
+
+// StartBackgroundChecks kicks off goroutines that refresh the update cache.
+// The first check fires 30s after boot to let the service settle; subsequent
+// checks run every 6 hours. Safe to call once from main after New().
+func (s *Server) StartBackgroundChecks(ctx context.Context) {
+	if s.Deps.UpdateRepo == "" {
+		return
+	}
+	go func() {
+		// initial delay so boot logs stay clean
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(30 * time.Second):
+		}
+		s.refreshUpdateStatus(ctx)
+
+		t := time.NewTicker(6 * time.Hour)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				s.refreshUpdateStatus(ctx)
+			}
+		}
+	}()
+}
+
+func (s *Server) refreshUpdateStatus(ctx context.Context) {
+	binPath, err := os.Executable()
+	if err != nil {
+		log.Printf("updater: os.Executable: %v", err)
+		return
+	}
+	st := updater.Check(ctx, s.Deps.UpdateRepo, binPath, s.Deps.Version)
+	s.updMu.Lock()
+	s.lastUpdate = st
+	s.updateAt = time.Now()
+	s.updMu.Unlock()
+	if st.UpdateAvailable {
+		log.Printf("updater: %s", st.Reason)
+	}
 }
 
 type contextKey int
@@ -91,6 +163,8 @@ func New(deps Deps) (*Server, error) {
 		gr.Get("/logs", s.logs)
 		gr.Get("/settings", s.getSettings)
 		gr.Post("/settings", s.postSettings)
+
+		gr.Post("/admin/update", s.postAdminUpdate)
 	})
 
 	s.Router = r
