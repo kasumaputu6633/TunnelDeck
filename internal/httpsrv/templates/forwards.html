@@ -1,12 +1,21 @@
 {{define "content"}}
 <div class="flex items-center justify-between mb-4">
-    <h1 class="text-lg font-semibold">Port forwards</h1>
-    <form method="POST" action="/forwards/apply">
-        <input type="hidden" name="csrf" value="{{.Session.CSRFToken}}">
-        <button class="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded px-3 py-2">
-            Apply nftables
-        </button>
-    </form>
+    <div>
+        <h1 class="text-lg font-semibold">Port forwards</h1>
+        <p class="text-xs text-slate-500 mt-0.5">nft table: {{.Data.Gateway.ManagedNFTTable}}</p>
+    </div>
+    <div class="flex items-center gap-3">
+        <div class="text-xs text-slate-500">
+            <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse mr-1 align-middle"></span>
+            live · updates every 5s
+        </div>
+        <form method="POST" action="/forwards/apply">
+            <input type="hidden" name="csrf" value="{{.Session.CSRFToken}}">
+            <button class="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded px-3 py-2">
+                Apply nftables
+            </button>
+        </form>
+    </div>
 </div>
 
 {{if .Data.ApplyPreview}}
@@ -23,41 +32,58 @@
                 <th class="text-left px-3 py-2">Name</th>
                 <th class="text-left px-3 py-2">Proto / Public</th>
                 <th class="text-left px-3 py-2">Target</th>
-                <th class="text-left px-3 py-2">Log</th>
+                <th class="text-left px-3 py-2">Counters</th>
                 <th class="text-left px-3 py-2">State</th>
                 <th class="px-3 py-2"></th>
             </tr>
         </thead>
-        <tbody>
-        {{range .Data.Forwards}}
-            <tr class="border-t border-slate-700">
-                <td class="px-3 py-2">{{.Name}}</td>
-                <td class="px-3 py-2 font-mono">{{.Proto}}/{{.PublicPort}}</td>
-                <td class="px-3 py-2 font-mono">{{.NodeName}} ({{.NodeWGIP}}:{{.TargetPort}})</td>
-                <td class="px-3 py-2 text-xs text-slate-400">{{.LogMode}}</td>
-                <td class="px-3 py-2">
-                    {{if .Enabled}}<span class="text-emerald-400 text-xs">enabled</span>
-                    {{else}}<span class="text-slate-500 text-xs">disabled</span>{{end}}
-                </td>
-                <td class="px-3 py-2 text-right">
-                    <form method="POST" action="/forwards/{{.ID}}/toggle" class="inline">
-                        <input type="hidden" name="csrf" value="{{$.Session.CSRFToken}}">
-                        <input type="hidden" name="enabled" value="{{if .Enabled}}0{{else}}1{{end}}">
-                        <button class="text-xs text-slate-300 hover:text-white">
-                            {{if .Enabled}}disable{{else}}enable{{end}}
-                        </button>
-                    </form>
-                    <form method="POST" action="/forwards/{{.ID}}/delete" class="inline ml-3"
-                          onsubmit="return confirm('Delete forward {{.Name}}?')">
-                        <input type="hidden" name="csrf" value="{{$.Session.CSRFToken}}">
-                        <button class="text-xs text-red-400 hover:text-red-300">delete</button>
-                    </form>
-                </td>
-            </tr>
-        {{else}}
-            <tr><td colspan="6" class="text-center text-slate-400 py-6">No forwards yet.</td></tr>
-        {{end}}
-        </tbody>
+        <div id="forwards-live"
+             hx-get="/forwards/fragment?page={{.Data.Pagination.Page}}&per={{.Data.Pagination.PerPage}}"
+             hx-trigger="every 5s"
+             hx-swap="outerHTML"
+             hx-target="#forwards-live">
+            <tbody>
+            {{range .Data.Forwards}}
+                <tr class="border-t border-slate-700 hover:bg-slate-700/30 transition-colors">
+                    <td class="px-3 py-2">{{.Name}}</td>
+                    <td class="px-3 py-2 font-mono text-xs">{{.Proto}}/{{.PublicPort}}</td>
+                    <td class="px-3 py-2 font-mono text-xs">{{.NodeName}} ({{.NodeWGIP}}:{{.TargetPort}})</td>
+                    <td class="px-3 py-2 text-xs text-slate-400">
+                        {{$c := index $.Data.Counters .ID}}
+                        {{if $c.Packets}}<span class="font-mono">{{$c.Packets}} pkts · {{formatBytes $c.Bytes}}</span>{{else}}—{{end}}
+                    </td>
+                    <td class="px-3 py-2">
+                        {{if .Enabled}}
+                        <span class="inline-flex items-center gap-1 text-emerald-400 text-xs">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block"></span>enabled
+                        </span>
+                        {{else}}
+                        <span class="inline-flex items-center gap-1 text-slate-500 text-xs">
+                            <span class="w-1.5 h-1.5 rounded-full bg-slate-600 inline-block"></span>disabled
+                        </span>
+                        {{end}}
+                    </td>
+                    <td class="px-3 py-2 text-right">
+                        <form method="POST" action="/forwards/{{.ID}}/toggle" class="inline">
+                            <input type="hidden" name="csrf" value="{{$.Session.CSRFToken}}">
+                            <input type="hidden" name="enabled" value="{{if .Enabled}}0{{else}}1{{end}}">
+                            <button class="text-xs text-slate-300 hover:text-white">
+                                {{if .Enabled}}disable{{else}}enable{{end}}
+                            </button>
+                        </form>
+                        <form method="POST" action="/forwards/{{.ID}}/delete" class="inline ml-3"
+                              onsubmit="return confirm('Delete forward {{.Name}}?')">
+                            <input type="hidden" name="csrf" value="{{$.Session.CSRFToken}}">
+                            <button class="text-xs text-red-400 hover:text-red-300">delete</button>
+                        </form>
+                    </td>
+                </tr>
+            {{else}}
+                <tr><td colspan="6" class="text-center text-slate-400 py-8">No forwards yet.</td></tr>
+            {{end}}
+            </tbody>
+            {{template "pagination" (dict "Page" .Data.Pagination.Page "TotalPages" .Data.Pagination.TotalPages "Total" .Data.Pagination.Total "PerPage" .Data.Pagination.PerPage "URLPrefix" "/forwards")}}
+        </div>
     </table>
 </div>
 
@@ -89,7 +115,8 @@
         </div>
         <div>
             <label class="block text-xs text-slate-400 mb-1">Public port (gateway)</label>
-            <input type="number" name="public_port" required min="1" max="65535" value="{{if .Data.Form.PublicPort}}{{.Data.Form.PublicPort}}{{end}}"
+            <input type="number" name="public_port" required min="1" max="65535"
+                   value="{{if .Data.Form.PublicPort}}{{.Data.Form.PublicPort}}{{end}}"
                    class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2">
         </div>
         <div>
@@ -103,7 +130,8 @@
         </div>
         <div>
             <label class="block text-xs text-slate-400 mb-1">Target port (on node)</label>
-            <input type="number" name="target_port" required min="1" max="65535" value="{{if .Data.Form.TargetPort}}{{.Data.Form.TargetPort}}{{end}}"
+            <input type="number" name="target_port" required min="1" max="65535"
+                   value="{{if .Data.Form.TargetPort}}{{.Data.Form.TargetPort}}{{end}}"
                    class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2">
         </div>
         <div class="col-span-2">

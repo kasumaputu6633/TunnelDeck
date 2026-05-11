@@ -86,3 +86,23 @@ func reasonSummary(st updater.Status) string {
 	}
 	return "a newer release has been published"
 }
+
+// renderFragment executes a fragment template (one whose file is prefixed
+// with _frag_ and whose top block is named "fragment"). Used for every
+// htmx polling/swap response. The envelope type is up to the caller —
+// pass whatever struct matches the template.
+func (s *Server) renderFragment(w http.ResponseWriter, name string, data any) {
+	t, ok := s.Templates[name]
+	if !ok {
+		http.Error(w, "unknown fragment: "+name, http.StatusInternalServerError)
+		return
+	}
+	var buf bytes.Buffer
+	if err := t.ExecuteTemplate(&buf, "fragment", data); err != nil {
+		log.Printf("fragment %s: %v", name, err)
+		http.Error(w, "fragment error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = buf.WriteTo(w)
+}

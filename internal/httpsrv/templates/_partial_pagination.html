@@ -1,0 +1,39 @@
+{{define "fragment"}}{{end}}
+{{define "pagination"}}
+{{/* Renders pagination controls below a table.
+     Expects a struct with fields:
+       .Page        — current 1-based page
+       .TotalPages  — total pages (≥ 1)
+       .Total       — total row count
+       .PerPage     — rows per page
+       .URLPrefix   — URL to link to (e.g. "/forwards")
+*/}}
+{{if gt .TotalPages 1}}
+<div class="flex items-center justify-between text-xs text-slate-400 px-3 py-2 border-t border-slate-700">
+    <div>
+        Page <span class="font-mono text-slate-200">{{.Page}}</span> of
+        <span class="font-mono text-slate-200">{{.TotalPages}}</span>
+        <span class="ml-2 text-slate-500">· {{.Total}} total</span>
+    </div>
+    <div class="flex items-center gap-1">
+        {{if gt .Page 1}}
+        <a href="{{.URLPrefix}}?page={{sub .Page 1}}&per={{.PerPage}}"
+           class="px-2 py-1 rounded bg-slate-900 border border-slate-700 hover:bg-slate-700">‹ prev</a>
+        {{else}}
+        <span class="px-2 py-1 rounded bg-slate-950 border border-slate-800 text-slate-600">‹ prev</span>
+        {{end}}
+
+        {{if lt .Page .TotalPages}}
+        <a href="{{.URLPrefix}}?page={{add .Page 1}}&per={{.PerPage}}"
+           class="px-2 py-1 rounded bg-slate-900 border border-slate-700 hover:bg-slate-700">next ›</a>
+        {{else}}
+        <span class="px-2 py-1 rounded bg-slate-950 border border-slate-800 text-slate-600">next ›</span>
+        {{end}}
+    </div>
+</div>
+{{else if gt .Total 0}}
+<div class="text-xs text-slate-500 px-3 py-2 border-t border-slate-700">
+    {{.Total}} total
+</div>
+{{end}}
+{{end}}

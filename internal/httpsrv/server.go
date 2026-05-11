@@ -4,6 +4,7 @@ package httpsrv
 import (
 	"context"
 	"embed"
+	"fmt"
 	"html/template"
 	"io/fs"
 	"log"
@@ -145,7 +146,9 @@ func New(deps Deps) (*Server, error) {
 		gr.Use(s.csrfMW)
 
 		gr.Get("/", s.dashboard)
+		gr.Get("/dashboard/fragment", s.dashboardFragment)
 		gr.Get("/nodes", s.listNodes)
+		gr.Get("/nodes/fragment", s.nodesFragment)
 		gr.Post("/nodes", s.createNode)
 		gr.Get("/nodes/{id}/setup", s.nodeSetup)
 		gr.Get("/nodes/{id}/status", s.nodeStatus)
@@ -153,15 +156,18 @@ func New(deps Deps) (*Server, error) {
 		gr.Post("/nodes/{id}/delete", s.deleteNode)
 
 		gr.Get("/forwards", s.listForwards)
+		gr.Get("/forwards/fragment", s.forwardsFragment)
 		gr.Post("/forwards", s.createForward)
 		gr.Post("/forwards/{id}/toggle", s.toggleForward)
 		gr.Post("/forwards/{id}/delete", s.deleteForward)
 		gr.Post("/forwards/apply", s.applyForwards)
 
 		gr.Get("/inspect", s.getInspect)
+		gr.Get("/inspect/fragment", s.inspectFragment)
 		gr.Post("/adopt", s.postAdopt)
 
 		gr.Get("/logs", s.logs)
+		gr.Get("/logs/fragment", s.logsFragment)
 		gr.Get("/settings", s.getSettings)
 		gr.Post("/settings", s.postSettings)
 
@@ -186,6 +192,34 @@ func parseTemplates() (map[string]*template.Template, error) {
 		},
 		"formatBytes":     formatBytes,
 		"formatHandshake": formatHandshake,
+		"add":             func(a, b int) int { return a + b },
+		"sub":             func(a, b int) int { return a - b },
+		"seq": func(start, end int) []int {
+			if end < start {
+				return nil
+			}
+			out := make([]int, 0, end-start+1)
+			for i := start; i <= end; i++ {
+				out = append(out, i)
+			}
+			return out
+		},
+		// dict builds a map[string]any from alternating key/value pairs.
+		// Used to pass named args to sub-templates like {{template "pagination" (dict "Page" .Page ...)}}.
+		"dict": func(pairs ...any) (map[string]any, error) {
+			if len(pairs)%2 != 0 {
+				return nil, fmt.Errorf("dict: odd number of arguments")
+			}
+			m := make(map[string]any, len(pairs)/2)
+			for i := 0; i < len(pairs); i += 2 {
+				k, ok := pairs[i].(string)
+				if !ok {
+					return nil, fmt.Errorf("dict: key %v is not a string", pairs[i])
+				}
+				m[k] = pairs[i+1]
+			}
+			return m, nil
+		},
 	}
 
 	baseBytes, err := templatesFS.ReadFile("templates/_base.html")
@@ -197,9 +231,30 @@ func parseTemplates() (map[string]*template.Template, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// First pass: collect partial templates (_partial_*.html). These
+	// define named blocks (e.g. "pagination") that every page can {{template}}
+	// include. Parsed into every tree below so the block name resolves.
+	var partials []string
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".html") {
+			continue
+		}
+		if strings.HasPrefix(e.Name(), "_partial_") {
+			b, err := templatesFS.ReadFile("templates/" + e.Name())
+			if err != nil {
+				return nil, err
+			}
+			partials = append(partials, string(b))
+		}
+	}
+
 	out := map[string]*template.Template{}
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".html") || e.Name() == "_base.html" {
+			continue
+		}
+		if strings.HasPrefix(e.Name(), "_partial_") {
 			continue
 		}
 		pageBytes, err := templatesFS.ReadFile("templates/" + e.Name())
@@ -215,6 +270,11 @@ func parseTemplates() (map[string]*template.Template, error) {
 			if err != nil {
 				return nil, err
 			}
+			for _, p := range partials {
+				if _, err := t.Parse(p); err != nil {
+					return nil, err
+				}
+			}
 			out[strings.TrimPrefix(name, "_frag_")] = t
 			continue
 		}
@@ -225,6 +285,11 @@ func parseTemplates() (map[string]*template.Template, error) {
 		}
 		if _, err := t.Parse(string(pageBytes)); err != nil {
 			return nil, err
+		}
+		for _, p := range partials {
+			if _, err := t.Parse(p); err != nil {
+				return nil, err
+			}
 		}
 		out[name] = t
 	}

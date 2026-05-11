@@ -1,7 +1,13 @@
 {{define "content"}}
 <div class="flex items-center justify-between mb-4">
-    <h1 class="text-lg font-semibold">Nodes</h1>
-    <span class="text-xs text-slate-400">Gateway: {{.Data.Gateway.WGIP}} · subnet {{.Data.Gateway.WGSubnet}}</span>
+    <div>
+        <h1 class="text-lg font-semibold">Nodes</h1>
+        <p class="text-xs text-slate-500 mt-0.5">Gateway: {{.Data.Gateway.WGIP}} · subnet {{.Data.Gateway.WGSubnet}}</p>
+    </div>
+    <div class="text-xs text-slate-500">
+        <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse mr-1 align-middle"></span>
+        live · updates every 5s
+    </div>
 </div>
 
 <div class="bg-slate-800 border border-slate-700 rounded-lg overflow-hidden mb-6">
@@ -11,48 +17,63 @@
                 <th class="text-left px-3 py-2">Name</th>
                 <th class="text-left px-3 py-2">WG IP</th>
                 <th class="text-left px-3 py-2">Status</th>
-                <th class="text-left px-3 py-2">Handshake
-                    <span class="ml-1 text-slate-500 cursor-help" title="WireGuard renews handshakes every ~2 minutes, so this counter resets whenever a refresh occurs — that's normal for an active tunnel.">(?)</span>
+                <th class="text-left px-3 py-2">
+                    Handshake
+                    <span class="ml-1 text-slate-600 cursor-help" title="WireGuard renews handshakes every ~2 minutes, so this counter resets on an active tunnel — that's normal.">(?)</span>
                 </th>
                 <th class="text-right px-3 py-2">RX / TX</th>
                 <th class="px-3 py-2"></th>
             </tr>
         </thead>
-        <tbody>
-        {{range .Data.Nodes}}
-            <tr class="border-t border-slate-700">
-                <td class="px-3 py-2">
-                    {{.Node.Name}}
-                    {{if .Node.Adopted}}<span class="ml-1 text-[10px] uppercase px-1 rounded bg-slate-700">adopted</span>{{end}}
-                </td>
-                <td class="px-3 py-2 font-mono">{{.Node.WGIP}}</td>
-                <td class="px-3 py-2">
-                    {{if .Online}}<span class="text-emerald-400">online</span>
-                    {{else}}<span class="text-slate-400">offline</span>{{end}}
-                </td>
-                <td class="px-3 py-2 text-slate-400">{{if .LatestHS}}{{.LatestHS}}{{else}}—{{end}}</td>
-                <td class="px-3 py-2 text-right text-slate-300 font-mono">{{formatBytes .RxBytes}} / {{formatBytes .TxBytes}}</td>
-                <td class="px-3 py-2 text-right">
-                    <a href="/nodes/{{.Node.ID}}/setup"
-                       class="text-xs text-slate-300 hover:text-white">setup</a>
-                    <form method="POST" action="/nodes/{{.Node.ID}}/delete"
-                          onsubmit="return confirm('Delete node {{.Node.Name}}?')"
-                          class="inline ml-3">
-                        <input type="hidden" name="csrf" value="{{$.Session.CSRFToken}}">
-                        <button class="text-xs text-red-400 hover:text-red-300">delete</button>
-                    </form>
-                </td>
-            </tr>
-        {{else}}
-            <tr><td colspan="6" class="text-center text-slate-400 py-6">No nodes yet.</td></tr>
-        {{end}}
-        </tbody>
+        <div id="nodes-live"
+             hx-get="/nodes/fragment?page={{.Data.Pagination.Page}}&per={{.Data.Pagination.PerPage}}"
+             hx-trigger="every 5s"
+             hx-swap="outerHTML"
+             hx-target="#nodes-live">
+            {{/* initial render — same structure as fragment */}}
+            <tbody>
+            {{range .Data.Nodes}}
+                <tr class="border-t border-slate-700 hover:bg-slate-700/30 transition-colors">
+                    <td class="px-3 py-2">
+                        {{.Node.Name}}
+                        {{if .Node.Adopted}}<span class="ml-1 text-[10px] uppercase px-1 rounded bg-slate-700">adopted</span>{{end}}
+                    </td>
+                    <td class="px-3 py-2 font-mono text-xs">{{.Node.WGIP}}</td>
+                    <td class="px-3 py-2">
+                        {{if .Online}}
+                        <span class="inline-flex items-center gap-1 text-emerald-400 text-xs">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block"></span>online
+                        </span>
+                        {{else}}
+                        <span class="inline-flex items-center gap-1 text-slate-400 text-xs">
+                            <span class="w-1.5 h-1.5 rounded-full bg-slate-500 inline-block"></span>offline
+                        </span>
+                        {{end}}
+                    </td>
+                    <td class="px-3 py-2 text-slate-400 text-xs">{{if .LatestHS}}{{.LatestHS}}{{else}}—{{end}}</td>
+                    <td class="px-3 py-2 text-right text-slate-300 font-mono text-xs">{{formatBytes .RxBytes}} / {{formatBytes .TxBytes}}</td>
+                    <td class="px-3 py-2 text-right">
+                        <a href="/nodes/{{.Node.ID}}/setup" class="text-xs text-slate-300 hover:text-white">setup</a>
+                        <form method="POST" action="/nodes/{{.Node.ID}}/delete"
+                              onsubmit="return confirm('Delete node {{.Node.Name}}?')"
+                              class="inline ml-3">
+                            <input type="hidden" name="csrf" value="{{$.Session.CSRFToken}}">
+                            <button class="text-xs text-red-400 hover:text-red-300">delete</button>
+                        </form>
+                    </td>
+                </tr>
+            {{else}}
+                <tr><td colspan="6" class="text-center text-slate-400 py-8">No nodes yet.</td></tr>
+            {{end}}
+            </tbody>
+            {{template "pagination" (dict "Page" .Data.Pagination.Page "TotalPages" .Data.Pagination.TotalPages "Total" .Data.Pagination.Total "PerPage" .Data.Pagination.PerPage "URLPrefix" "/nodes")}}
+        </div>
     </table>
 </div>
 
 <div class="bg-slate-800 border border-slate-700 rounded-lg p-4 max-w-xl">
     <h2 class="text-sm font-semibold mb-3">Add node</h2>
-    <p class="text-xs text-slate-400 mb-3">Next available WG IP: <span class="font-mono">{{.Data.NextIP}}</span></p>
+    <p class="text-xs text-slate-400 mb-3">Next available WG IP: <span class="font-mono text-slate-200">{{.Data.NextIP}}</span></p>
     <form method="POST" action="/nodes" class="space-y-3">
         <input type="hidden" name="csrf" value="{{.Session.CSRFToken}}">
         <div>
@@ -60,12 +81,12 @@
             <input name="name" required class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm" placeholder="home-lab">
         </div>
         <button class="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded px-3 py-2">
-            Allocate & create
+            Allocate &amp; create
         </button>
     </form>
     <div class="mt-4 text-xs text-slate-400">
-        After creating, set up the node with a matching WireGuard config pointing at
-        <span class="font-mono">{{.Data.Gateway.PublicIP}}:{{.Data.Gateway.WGPort}}</span>.
+        After creating, follow the setup tutorial to connect the node.
+        Gateway endpoint: <span class="font-mono">{{.Data.Gateway.PublicIP}}:{{.Data.Gateway.WGPort}}</span>
     </div>
 </div>
 {{end}}

@@ -1,0 +1,66 @@
+{{define "fragment"}}
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+    <div class="bg-slate-800 border border-slate-700 rounded-lg p-4">
+        <h2 class="text-sm font-semibold mb-3">Networking</h2>
+        <ul class="text-sm space-y-1">
+            <li>Default WAN: <span class="font-mono">{{or .DefaultWANIf "unknown"}}</span></li>
+            <li>IP forwarding: {{if .IPForward}}<span class="text-emerald-400">enabled</span>{{else}}<span class="text-amber-400">disabled</span>{{end}}</li>
+            <li>UFW: {{if .UFWActive}}<span class="text-amber-400">active</span>{{else}}<span class="text-slate-400">inactive / not installed</span>{{end}}</li>
+        </ul>
+    </div>
+    <div class="bg-slate-800 border border-slate-700 rounded-lg p-4">
+        <h2 class="text-sm font-semibold mb-3">WireGuard</h2>
+        <ul class="text-sm space-y-1">
+            <li>Installed: {{if .WGInstalled}}yes{{else}}<span class="text-slate-400">no</span>{{end}}</li>
+            <li>Interfaces: <span class="font-mono">{{range .WGInterfaces}}{{.}} {{end}}</span></li>
+            <li>Primary: <span class="font-mono">{{or .WGPrimary "—"}}</span></li>
+            <li>Listen port: <span class="font-mono">{{.WGListenPort}}</span></li>
+            <li>wg0.conf on disk: {{if .WGConfPresent}}<span class="text-emerald-400">yes</span>{{else}}<span class="text-slate-400">no</span>{{end}}</li>
+            <li>Gateway WG IP: <span class="font-mono">{{or .WGGatewayIP "—"}}</span></li>
+        </ul>
+    </div>
+</div>
+
+<div class="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-4">
+    <h2 class="text-sm font-semibold mb-3">Detected peers</h2>
+    {{if .WGPeers}}
+    <table class="w-full text-sm">
+        <thead class="text-xs text-slate-400"><tr>
+            <th class="text-left py-1">Allowed IPs</th>
+            <th class="text-left">Last handshake</th>
+            <th class="text-right">RX</th>
+            <th class="text-right">TX</th>
+        </tr></thead>
+        <tbody>
+        {{range .WGPeers}}
+            <tr class="border-t border-slate-700 hover:bg-slate-700/30 transition-colors">
+                <td class="py-1 font-mono text-xs">{{range .AllowedIPs}}{{.}} {{end}}</td>
+                <td class="text-xs">{{formatHandshake .LatestHandshakeUnix}}</td>
+                <td class="text-right text-xs">{{formatBytes .RxBytes}}</td>
+                <td class="text-right text-xs">{{formatBytes .TxBytes}}</td>
+            </tr>
+        {{end}}
+        </tbody>
+    </table>
+    {{else}}<p class="text-sm text-slate-400">No peers detected.</p>{{end}}
+</div>
+
+<div class="bg-slate-800 border border-slate-700 rounded-lg p-4">
+    <h2 class="text-sm font-semibold mb-3">Detected nftables tables</h2>
+    {{if .NFTDetected}}
+        {{range .NFTDetected}}
+        <div class="mb-3">
+            <div class="text-sm font-mono">table ip {{.Name}}</div>
+            <ul class="text-xs text-slate-300 space-y-1 mt-1">
+            {{range .Forwards}}
+                <li class="font-mono">{{.Proto}} dport {{.PublicPort}} → {{.TargetIP}}:{{.TargetPort}}{{if .HasCounter}} (counter){{end}}</li>
+            {{end}}
+            {{range .Unknown}}<li class="font-mono text-amber-300">unknown: {{.}}</li>{{end}}
+            </ul>
+        </div>
+        {{end}}
+    {{else}}
+        <p class="text-sm text-slate-400">No DNAT tables detected.</p>
+    {{end}}
+</div>
+{{end}}

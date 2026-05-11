@@ -1,27 +1,46 @@
 {{define "content"}}
-<h1 class="text-lg font-semibold mb-4">Audit log</h1>
+<div class="flex items-center justify-between mb-4">
+    <h1 class="text-lg font-semibold">Audit log</h1>
+    <div class="text-xs text-slate-500">
+        <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse mr-1 align-middle"></span>
+        page 1 auto-refreshes every 10s
+    </div>
+</div>
+
 <div class="bg-slate-800 border border-slate-700 rounded-lg overflow-hidden">
     <table class="w-full text-sm">
-        <thead class="text-xs text-slate-400 bg-slate-900"><tr>
-            <th class="text-left px-3 py-2">When</th>
-            <th class="text-left px-3 py-2">Actor</th>
-            <th class="text-left px-3 py-2">Action</th>
-            <th class="text-left px-3 py-2">Target</th>
-            <th class="text-left px-3 py-2">Detail</th>
-        </tr></thead>
-        <tbody>
-        {{range .Data.Audit}}
-            <tr class="border-t border-slate-700">
-                <td class="px-3 py-1 text-slate-400 font-mono">{{.TS.Format "2006-01-02 15:04:05"}}</td>
-                <td class="px-3 py-1">{{.Actor}}</td>
-                <td class="px-3 py-1 text-emerald-300 font-mono">{{.Action}}</td>
-                <td class="px-3 py-1 font-mono">{{.Target}}</td>
-                <td class="px-3 py-1 text-xs text-slate-400 font-mono">{{.Detail}}</td>
+        <thead class="text-xs text-slate-400 bg-slate-900">
+            <tr>
+                <th class="text-left px-3 py-2">When</th>
+                <th class="text-left px-3 py-2">Actor</th>
+                <th class="text-left px-3 py-2">Action</th>
+                <th class="text-left px-3 py-2">Target</th>
+                <th class="text-left px-3 py-2">Detail</th>
             </tr>
-        {{else}}
-            <tr><td colspan="5" class="text-center text-slate-400 py-6">No audit entries yet.</td></tr>
-        {{end}}
-        </tbody>
+        </thead>
+        {{/* Only auto-refresh on page 1 so users scrolling history aren't disrupted */}}
+        <div id="logs-live"
+             {{if eq .Data.Pagination.Page 1}}
+             hx-get="/logs/fragment?page=1&per={{.Data.Pagination.PerPage}}"
+             hx-trigger="every 10s"
+             hx-swap="outerHTML"
+             hx-target="#logs-live"
+             {{end}}>
+            <tbody>
+            {{range .Data.Audit}}
+                <tr class="border-t border-slate-700 hover:bg-slate-700/30 transition-colors">
+                    <td class="px-3 py-1 text-slate-400 font-mono text-xs">{{.TS.Format "2006-01-02 15:04:05"}}</td>
+                    <td class="px-3 py-1 text-xs">{{.Actor}}</td>
+                    <td class="px-3 py-1 text-emerald-300 font-mono text-xs">{{.Action}}</td>
+                    <td class="px-3 py-1 font-mono text-xs">{{.Target}}</td>
+                    <td class="px-3 py-1 text-xs text-slate-400 font-mono truncate max-w-xs">{{.Detail}}</td>
+                </tr>
+            {{else}}
+                <tr><td colspan="5" class="text-center text-slate-400 py-8">No audit entries yet.</td></tr>
+            {{end}}
+            </tbody>
+            {{template "pagination" (dict "Page" .Data.Pagination.Page "TotalPages" .Data.Pagination.TotalPages "Total" .Data.Pagination.Total "PerPage" .Data.Pagination.PerPage "URLPrefix" "/logs")}}
+        </div>
     </table>
 </div>
 {{end}}

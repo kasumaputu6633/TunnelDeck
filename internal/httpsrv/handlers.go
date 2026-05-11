@@ -80,14 +80,26 @@ type dashboardData struct {
 }
 
 func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+	d := s.computeDashboard(r.Context())
+	s.render(w, r, "dashboard", "Dashboard", d, flashFromQuery(r))
+}
+
+// dashboardFragment is the htmx-polled version of the dashboard body.
+// Returns just the stat cards + peer table + recent audit strip.
+func (s *Server) dashboardFragment(w http.ResponseWriter, r *http.Request) {
+	d := s.computeDashboard(r.Context())
+	s.renderFragment(w, "dashboard_live", d)
+}
+
+// computeDashboard gathers everything the dashboard renders. Shared by the
+// full page and the htmx fragment so the two never drift.
+func (s *Server) computeDashboard(ctx context.Context) dashboardData {
 	g, _ := s.Deps.DB.GetGateway(ctx)
 
 	nodes, _ := s.Deps.DB.ListNodes(ctx)
 	fwds, _ := s.Deps.DB.ListForwardsWithNode(ctx)
-	audits, _ := s.Deps.DB.ListAudit(ctx, 20)
+	audits, _ := s.Deps.DB.ListAudit(ctx, 10)
 
-	// Live peer data (may be empty on Windows dev / no wg).
 	peers := liveWGPeers(ctx, s, g.WGIf)
 	peerMap := map[string]wg.Peer{}
 	for _, p := range peers {
@@ -113,7 +125,7 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	d := dashboardData{
+	return dashboardData{
 		Gateway:      g,
 		NodeCount:    len(nodes),
 		OnlineCount:  online,
@@ -126,7 +138,6 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 		TotalTx:      totalTx,
 		OnlineWindow: onlineWindow,
 	}
-	s.render(w, r, "dashboard", "Dashboard", d, flashFromQuery(r))
 }
 
 // ---- nodes ----
@@ -137,6 +148,7 @@ type nodesData struct {
 	NextIP   string
 	NewNode  nodeSetup
 	Err      string
+	Pagination db.PageResult
 }
 
 type nodeRow struct {
@@ -158,25 +170,26 @@ type nodeSetup struct {
 func (s *Server) listNodes(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	g, _ := s.Deps.DB.GetGateway(ctx)
-	nodes, _ := s.Deps.DB.ListNodes(ctx)
+	p := pageFromRequest(r)
+	nodes, pr, _ := s.Deps.DB.ListNodesPage(ctx, p)
 	peers := liveWGPeers(ctx, s, g.WGIf)
 
 	cutoff := time.Now().Add(-2 * time.Minute).Unix()
 	rows := make([]nodeRow, 0, len(nodes))
 	for _, n := range nodes {
 		row := nodeRow{Node: n}
-		for _, p := range peers {
-			if wg.FirstAllowedHost(p) != n.WGIP {
+		for _, peer := range peers {
+			if wg.FirstAllowedHost(peer) != n.WGIP {
 				continue
 			}
-			row.Online = p.LatestHandshakeUnix >= cutoff
-			if p.LatestHandshakeUnix > 0 {
-				row.LatestHS = formatHandshake(p.LatestHandshakeUnix)
+			row.Online = peer.LatestHandshakeUnix >= cutoff
+			if peer.LatestHandshakeUnix > 0 {
+				row.LatestHS = formatHandshake(peer.LatestHandshakeUnix)
 			} else {
 				row.LatestHS = "never"
 			}
-			row.RxBytes = p.RxBytes
-			row.TxBytes = p.TxBytes
+			row.RxBytes = peer.RxBytes
+			row.TxBytes = peer.TxBytes
 			break
 		}
 		rows = append(rows, row)
@@ -186,13 +199,55 @@ func (s *Server) listNodes(w http.ResponseWriter, r *http.Request) {
 	for _, n := range nodes {
 		used = append(used, n.WGIP)
 	}
-	next, _ := forwards.AllocateNextIP(g.WGSubnet, stripCIDR(g.WGIP), used)
+	// For next-IP allocation we need all nodes, not just the current page.
+	allNodes, _ := s.Deps.DB.ListNodes(ctx)
+	allUsed := make([]string, 0, len(allNodes))
+	for _, n := range allNodes {
+		allUsed = append(allUsed, n.WGIP)
+	}
+	next, _ := forwards.AllocateNextIP(g.WGSubnet, stripCIDR(g.WGIP), allUsed)
 
 	s.render(w, r, "nodes", "Nodes", nodesData{
-		Gateway: g,
-		Nodes:   rows,
-		NextIP:  next,
+		Gateway:    g,
+		Nodes:      rows,
+		NextIP:     next,
+		Pagination: pr,
 	}, flashFromQuery(r))
+}
+
+// nodesFragment is the htmx-polled tbody + pagination for the nodes table.
+func (s *Server) nodesFragment(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	g, _ := s.Deps.DB.GetGateway(ctx)
+	p := pageFromRequest(r)
+	nodes, pr, _ := s.Deps.DB.ListNodesPage(ctx, p)
+	peers := liveWGPeers(ctx, s, g.WGIf)
+
+	cutoff := time.Now().Add(-2 * time.Minute).Unix()
+	rows := make([]nodeRow, 0, len(nodes))
+	for _, n := range nodes {
+		row := nodeRow{Node: n}
+		for _, peer := range peers {
+			if wg.FirstAllowedHost(peer) != n.WGIP {
+				continue
+			}
+			row.Online = peer.LatestHandshakeUnix >= cutoff
+			if peer.LatestHandshakeUnix > 0 {
+				row.LatestHS = formatHandshake(peer.LatestHandshakeUnix)
+			} else {
+				row.LatestHS = "never"
+			}
+			row.RxBytes = peer.RxBytes
+			row.TxBytes = peer.TxBytes
+			break
+		}
+		rows = append(rows, row)
+	}
+	s.renderFragment(w, "nodes_live", struct {
+		Rows       []nodeRow
+		Pagination db.PageResult
+		CSRF       string
+	}{rows, pr, sessionFromCtx(r.Context()).CSRFToken})
 }
 
 func (s *Server) createNode(w http.ResponseWriter, r *http.Request) {
@@ -523,24 +578,50 @@ func (s *Server) deleteNode(w http.ResponseWriter, r *http.Request) {
 // ---- forwards ----
 
 type forwardsData struct {
-	Gateway  db.Gateway
-	Forwards []db.Forward
-	Nodes    []db.Node
-	Issues   []forwards.Issue
-	Form     forwards.Input
+	Gateway      db.Gateway
+	Forwards     []db.Forward
+	Nodes        []db.Node
+	Issues       []forwards.Issue
+	Form         forwards.Input
 	ApplyPreview string
+	Pagination   db.PageResult
+	Counters     map[int64]nft.RuleCounter
 }
 
 func (s *Server) listForwards(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	g, _ := s.Deps.DB.GetGateway(ctx)
-	fwds, _ := s.Deps.DB.ListForwardsWithNode(ctx)
+	p := pageFromRequest(r)
+	fwds, pr, _ := s.Deps.DB.ListForwardsWithNodePage(ctx, p)
 	nodes, _ := s.Deps.DB.ListNodes(ctx)
+	counters, _ := s.Deps.NFT.CountersByForwardID(ctx, g.ManagedNFTTable)
 	s.render(w, r, "forwards", "Forwards", forwardsData{
-		Gateway:  g,
-		Forwards: fwds,
-		Nodes:    nodes,
+		Gateway:    g,
+		Forwards:   fwds,
+		Nodes:      nodes,
+		Pagination: pr,
+		Counters:   counters,
 	}, flashFromQuery(r))
+}
+
+// forwardsFragment is the htmx-polled tbody + counters + pagination.
+func (s *Server) forwardsFragment(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	g, _ := s.Deps.DB.GetGateway(ctx)
+	p := pageFromRequest(r)
+	fwds, pr, _ := s.Deps.DB.ListForwardsWithNodePage(ctx, p)
+	counters, _ := s.Deps.NFT.CountersByForwardID(ctx, g.ManagedNFTTable)
+	sess := sessionFromCtx(r.Context())
+	csrf := ""
+	if sess != nil {
+		csrf = sess.CSRFToken
+	}
+	s.renderFragment(w, "forwards_live", struct {
+		Forwards   []db.Forward
+		Pagination db.PageResult
+		Counters   map[int64]nft.RuleCounter
+		CSRF       string
+	}{fwds, pr, counters, csrf})
 }
 
 func (s *Server) createForward(w http.ResponseWriter, r *http.Request) {
@@ -679,6 +760,12 @@ func (s *Server) getInspect(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, "inspect", "Inspect", inspectData{Report: rep, Gateway: g}, flashFromQuery(r))
 }
 
+// inspectFragment is polled every 10s to refresh peer + nft table data.
+func (s *Server) inspectFragment(w http.ResponseWriter, r *http.Request) {
+	rep := inspect.Host{Runner: s.Deps.Runner, ReadFile: os.ReadFile}.Run(r.Context())
+	s.renderFragment(w, "inspect_live", rep)
+}
+
 func (s *Server) postAdopt(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	rep := inspect.Host{Runner: s.Deps.Runner, ReadFile: os.ReadFile}.Run(ctx)
@@ -702,11 +789,31 @@ func (s *Server) postAdopt(w http.ResponseWriter, r *http.Request) {
 
 // ---- logs ----
 
-type logsData struct{ Audit []db.AuditEntry }
+type logsData struct {
+	Audit      []db.AuditEntry
+	Pagination db.PageResult
+}
 
 func (s *Server) logs(w http.ResponseWriter, r *http.Request) {
-	audits, _ := s.Deps.DB.ListAudit(r.Context(), 500)
-	s.render(w, r, "logs", "Logs", logsData{Audit: audits}, flashFromQuery(r))
+	p := pageFromRequest(r)
+	audits, pr, _ := s.Deps.DB.ListAuditPage(r.Context(), p)
+	s.render(w, r, "logs", "Logs", logsData{Audit: audits, Pagination: pr}, flashFromQuery(r))
+}
+
+// logsFragment is polled only on page 1 (newest entries).
+func (s *Server) logsFragment(w http.ResponseWriter, r *http.Request) {
+	p := pageFromRequest(r)
+	audits, pr, _ := s.Deps.DB.ListAuditPage(r.Context(), p)
+	sess := sessionFromCtx(r.Context())
+	csrf := ""
+	if sess != nil {
+		csrf = sess.CSRFToken
+	}
+	s.renderFragment(w, "logs_live", struct {
+		Audit      []db.AuditEntry
+		Pagination db.PageResult
+		CSRF       string
+	}{audits, pr, csrf})
 }
 
 // ---- settings ----
