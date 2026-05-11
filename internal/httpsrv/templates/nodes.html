@@ -25,50 +25,46 @@
                 <th class="px-3 py-2"></th>
             </tr>
         </thead>
-        <div id="nodes-live"
-             hx-get="/nodes/fragment?page={{.Data.Pagination.Page}}&per={{.Data.Pagination.PerPage}}"
-             hx-trigger="every 5s"
-             hx-swap="outerHTML"
-             hx-target="#nodes-live">
-            {{/* initial render — same structure as fragment */}}
-            <tbody>
-            {{range .Data.Nodes}}
-                <tr class="border-t border-slate-700 hover:bg-slate-700/30 transition-colors">
-                    <td class="px-3 py-2">
-                        {{.Node.Name}}
-                        {{if .Node.Adopted}}<span class="ml-1 text-[10px] uppercase px-1 rounded bg-slate-700">adopted</span>{{end}}
-                    </td>
-                    <td class="px-3 py-2 font-mono text-xs">{{.Node.WGIP}}</td>
-                    <td class="px-3 py-2">
-                        {{if .Online}}
-                        <span class="inline-flex items-center gap-1 text-emerald-400 text-xs">
-                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block"></span>online
-                        </span>
-                        {{else}}
-                        <span class="inline-flex items-center gap-1 text-slate-400 text-xs">
-                            <span class="w-1.5 h-1.5 rounded-full bg-slate-500 inline-block"></span>offline
-                        </span>
-                        {{end}}
-                    </td>
-                    <td class="px-3 py-2 text-slate-400 text-xs">{{if .LatestHS}}{{.LatestHS}}{{else}}—{{end}}</td>
-                    <td class="px-3 py-2 text-right text-slate-300 font-mono text-xs">{{formatBytes .RxBytes}} / {{formatBytes .TxBytes}}</td>
-                    <td class="px-3 py-2 text-right">
-                        <a href="/nodes/{{.Node.ID}}/setup" class="text-xs text-slate-300 hover:text-white">setup</a>
-                        <form method="POST" action="/nodes/{{.Node.ID}}/delete"
-                              onsubmit="return confirm('Delete node {{.Node.Name}}?')"
-                              class="inline ml-3">
-                            <input type="hidden" name="csrf" value="{{$.Session.CSRFToken}}">
-                            <button class="text-xs text-red-400 hover:text-red-300">delete</button>
-                        </form>
-                    </td>
-                </tr>
-            {{else}}
-                <tr><td colspan="6" class="text-center text-slate-400 py-8">No nodes yet.</td></tr>
-            {{end}}
-            </tbody>
-            {{template "pagination" (dict "Page" .Data.Pagination.Page "TotalPages" .Data.Pagination.TotalPages "Total" .Data.Pagination.Total "PerPage" .Data.Pagination.PerPage "URLPrefix" "/nodes")}}
-        </div>
+        <tbody id="nodes-tbody"
+               hx-get="/nodes/fragment?page={{.Data.Pagination.Page}}&per={{.Data.Pagination.PerPage}}"
+               hx-trigger="every 5s"
+               hx-swap="outerHTML">
+        {{range .Data.Nodes}}
+            <tr class="border-t border-slate-700 hover:bg-slate-700/30 transition-colors">
+                <td class="px-3 py-2">
+                    {{.Node.Name}}
+                    {{if .Node.Adopted}}<span class="ml-1 text-[10px] uppercase px-1 rounded bg-slate-700">adopted</span>{{end}}
+                </td>
+                <td class="px-3 py-2 font-mono text-xs">{{.Node.WGIP}}</td>
+                <td class="px-3 py-2">
+                    {{if .Online}}
+                    <span class="inline-flex items-center gap-1 text-emerald-400 text-xs">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block"></span>online
+                    </span>
+                    {{else}}
+                    <span class="inline-flex items-center gap-1 text-slate-400 text-xs">
+                        <span class="w-1.5 h-1.5 rounded-full bg-slate-500 inline-block"></span>offline
+                    </span>
+                    {{end}}
+                </td>
+                <td class="px-3 py-2 text-slate-400 text-xs">{{if .LatestHS}}{{.LatestHS}}{{else}}—{{end}}</td>
+                <td class="px-3 py-2 text-right text-slate-300 font-mono text-xs">{{formatBytes .RxBytes}} / {{formatBytes .TxBytes}}</td>
+                <td class="px-3 py-2 text-right">
+                    <a href="/nodes/{{.Node.ID}}/setup" class="text-xs text-slate-300 hover:text-white">setup</a>
+                    <form method="POST" action="/nodes/{{.Node.ID}}/delete"
+                          onsubmit="return confirm('Delete node {{.Node.Name}}?')"
+                          class="inline ml-3">
+                        <input type="hidden" name="csrf" value="{{$.Session.CSRFToken}}">
+                        <button class="text-xs text-red-400 hover:text-red-300">delete</button>
+                    </form>
+                </td>
+            </tr>
+        {{else}}
+            <tr><td colspan="6" class="text-center text-slate-400 py-8">No nodes yet.</td></tr>
+        {{end}}
+        </tbody>
     </table>
+    {{template "pagination" (dict "Page" .Data.Pagination.Page "TotalPages" .Data.Pagination.TotalPages "Total" .Data.Pagination.Total "PerPage" .Data.Pagination.PerPage "URLPrefix" "/nodes")}}
 </div>
 
 <div class="bg-slate-800 border border-slate-700 rounded-lg p-4 max-w-xl">

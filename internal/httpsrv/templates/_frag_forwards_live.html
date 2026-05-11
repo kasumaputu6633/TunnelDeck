@@ -1,5 +1,8 @@
 {{define "fragment"}}
-<tbody>
+<tbody id="forwards-tbody"
+       hx-get="/forwards/fragment?page={{.Pagination.Page}}&per={{.Pagination.PerPage}}"
+       hx-trigger="every 5s"
+       hx-swap="outerHTML">
 {{range .Forwards}}
     <tr class="border-t border-slate-700 hover:bg-slate-700/30 transition-colors">
         <td class="px-3 py-2">{{.Name}}</td>
@@ -7,9 +10,7 @@
         <td class="px-3 py-2 font-mono text-xs">{{.NodeName}} ({{.NodeWGIP}}:{{.TargetPort}})</td>
         <td class="px-3 py-2 text-xs text-slate-400">
             {{$c := index $.Counters .ID}}
-            {{if $c.Packets}}
-            <span class="font-mono">{{$c.Packets}} pkts · {{formatBytes $c.Bytes}}</span>
-            {{else}}—{{end}}
+            {{if $c.Packets}}<span class="font-mono">{{$c.Packets}} pkts · {{formatBytes $c.Bytes}}</span>{{else}}—{{end}}
         </td>
         <td class="px-3 py-2">
             {{if .Enabled}}
@@ -41,5 +42,4 @@
     <tr><td colspan="6" class="text-center text-slate-400 py-8">No forwards yet.</td></tr>
 {{end}}
 </tbody>
-{{template "pagination" (dict "Page" .Pagination.Page "TotalPages" .Pagination.TotalPages "Total" .Pagination.Total "PerPage" .Pagination.PerPage "URLPrefix" "/forwards")}}
 {{end}}
