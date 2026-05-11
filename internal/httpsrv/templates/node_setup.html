@@ -29,7 +29,7 @@
         <option value="macos">macOS</option>
         <option value="windows">Windows 10 / 11</option>
     </select>
-    <p class="text-xs text-slate-500 mt-2">The config values below are identical across OSes; only the install + activate commands differ.</p>
+    <p class="text-xs text-slate-500 mt-2">The config values below are identical across OSes; only the install and activate steps differ.</p>
 </div>
 
 <!-- ==================== LINUX ==================== -->
@@ -63,15 +63,6 @@ sudo chmod 600 /etc/wireguard/node.key</pre>
 sudo chmod 600 /etc/wireguard/wg0.conf</pre>
 </div>
 
-<div class="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-4">
-    <h2 class="text-sm font-semibold mb-2">5. Bring up the tunnel on the node</h2>
-    <pre class="text-xs bg-slate-950 border border-slate-700 rounded p-3 overflow-x-auto">sudo systemctl enable --now wg-quick@wg0
-
-# verify
-sudo wg show
-ping -c3 {{stripCIDR .Data.Gateway.WGIP}}</pre>
-</div>
-
 </div><!-- /linux -->
 
 <!-- ==================== MACOS ==================== -->
@@ -101,13 +92,6 @@ cat ~/node.pub   # paste this into step 4</pre>
     <p class="text-xs text-slate-400 mt-2">The <span class="font-mono">PrivateKey</span> line is pre-filled by the app when you used <span class="font-mono">Add Empty Tunnel</span>; leave it alone and only change <span class="font-mono">Address</span>, <span class="font-mono">[Peer]</span>, <span class="font-mono">Endpoint</span>, <span class="font-mono">AllowedIPs</span>, and <span class="font-mono">PersistentKeepalive</span>.</p>
 </div>
 
-<div class="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-4">
-    <h2 class="text-sm font-semibold mb-2">5. Activate the tunnel on the node</h2>
-    <p class="text-xs text-slate-400 mb-2">Toggle the switch next to the tunnel name in the WireGuard app, then verify:</p>
-    <pre class="text-xs bg-slate-950 border border-slate-700 rounded p-3 overflow-x-auto">ping -c3 {{stripCIDR .Data.Gateway.WGIP}}</pre>
-    <p class="text-xs text-slate-400 mt-2">Enable <span class="font-mono">On-Demand</span> in the tunnel settings to have the Mac reconnect automatically.</p>
-</div>
-
 </div><!-- /macos -->
 
 <!-- ==================== WINDOWS ==================== -->
@@ -132,24 +116,44 @@ cat ~/node.pub   # paste this into step 4</pre>
     <p class="text-xs text-slate-400 mt-2">Give the tunnel a name (e.g. <span class="font-mono">TunnelDeck</span>) and click <span class="font-mono">Save</span>.</p>
 </div>
 
-<div class="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-4">
-    <h2 class="text-sm font-semibold mb-2">5. Activate the tunnel on the node</h2>
-    <p class="text-xs text-slate-400 mb-2">Click the tunnel in the list and press <span class="font-mono">Activate</span>. Verify from an Administrator PowerShell:</p>
-    <pre class="text-xs bg-slate-950 border border-slate-700 rounded p-3 overflow-x-auto">ping {{stripCIDR .Data.Gateway.WGIP}}</pre>
-    <p class="text-xs text-slate-400 mt-2">Right-click the WireGuard tray icon → <span class="font-mono">Settings → Start automatically</span> if you want it to reconnect at boot.</p>
-</div>
-
 </div><!-- /windows -->
 
-<!-- ==================== STEP 4 (same across OSes) ==================== -->
-<div class="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-4">
+<!-- ==================== STEP 4 (OS-independent; handled by the Web UI) ==================== -->
+<div class="bg-slate-800 border border-emerald-800 rounded-lg p-4 mb-4">
     <h2 class="text-sm font-semibold mb-2">4. Register the node's public key on the gateway</h2>
-    <p class="text-xs text-slate-400 mb-2">Run this on the <strong>gateway</strong> (this VPS). Replace <span class="font-mono">&lt;NODE_PUBLIC_KEY&gt;</span> with the value you copied in step 2:</p>
-    <pre class="text-xs bg-slate-950 border border-slate-700 rounded p-3 overflow-x-auto"># add the peer at runtime (takes effect immediately)
-sudo wg set {{.Data.Gateway.WGIf}} peer &lt;NODE_PUBLIC_KEY&gt; allowed-ips {{.Data.Node.WGIP}}/32 persistent-keepalive {{.Data.Node.Keepalive}}
+    {{if .Data.HasPublicKey}}
+    <div class="text-xs text-emerald-300 bg-emerald-950 border border-emerald-800 rounded px-3 py-2">
+        Public key already registered for this node. If you regenerated keys on the node,
+        delete and re-create the node from the <a href="/nodes" class="underline">Nodes page</a>
+        to get a fresh slot.
+    </div>
+    {{else}}
+    <p class="text-xs text-slate-400 mb-2">
+        Paste the node's public key (from step 2) here and TunnelDeck will add it as a peer on the
+        gateway and persist it to <span class="font-mono">wg0.conf</span>. No SSH to the gateway
+        required.
+    </p>
+    <form method="POST" action="/nodes/{{.Data.Node.ID}}/register-pubkey" class="space-y-2">
+        <input type="hidden" name="csrf" value="{{.Session.CSRFToken}}">
+        <input name="public_key" required autocomplete="off"
+               placeholder="44-character base64 public key ending in ="
+               class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm font-mono">
+        <div class="flex items-center justify-between">
+            <p class="text-xs text-slate-500">
+                Runtime: <span class="font-mono">wg set</span> &middot;
+                Persist: append to <span class="font-mono">/etc/wireguard/{{.Data.Gateway.WGIf}}.conf</span>
+                (backup first)
+            </p>
+            <button class="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded px-3 py-2">
+                Register peer
+            </button>
+        </div>
+    </form>
+    <details class="mt-3">
+        <summary class="text-xs text-slate-500 cursor-pointer hover:text-slate-300">prefer to run it yourself on the gateway?</summary>
+        <pre class="text-xs bg-slate-950 border border-slate-700 rounded p-3 overflow-x-auto mt-2">sudo wg set {{.Data.Gateway.WGIf}} peer &lt;NODE_PUBLIC_KEY&gt; allowed-ips {{.Data.Node.WGIP}}/32 persistent-keepalive {{.Data.Node.Keepalive}}
 
-# persist to disk so the peer comes back on reboot
-sudo tee -a /etc/wireguard/wg0.conf &gt; /dev/null &lt;&lt;'EOF'
+sudo tee -a /etc/wireguard/{{.Data.Gateway.WGIf}}.conf &gt; /dev/null &lt;&lt;'EOF'
 
 [Peer]
 # tunneldeck:node={{.Data.Node.Name}}
@@ -157,6 +161,37 @@ PublicKey = &lt;NODE_PUBLIC_KEY&gt;
 AllowedIPs = {{.Data.Node.WGIP}}/32
 PersistentKeepalive = {{.Data.Node.Keepalive}}
 EOF</pre>
-    <p class="text-xs text-slate-500 mt-2">Step 4 is the same regardless of which OS the node runs — the gateway doesn't care.</p>
+    </details>
+    {{end}}
+</div>
+
+<!-- ==================== STEP 5 (per-OS activate) ==================== -->
+<div data-os="linux">
+<div class="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-4">
+    <h2 class="text-sm font-semibold mb-2">5. Bring up the tunnel on the node</h2>
+    <pre class="text-xs bg-slate-950 border border-slate-700 rounded p-3 overflow-x-auto">sudo systemctl enable --now wg-quick@wg0
+
+# verify
+sudo wg show
+ping -c3 {{stripCIDR .Data.Gateway.WGIP}}</pre>
+</div>
+</div>
+
+<div data-os="macos" style="display:none">
+<div class="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-4">
+    <h2 class="text-sm font-semibold mb-2">5. Activate the tunnel on the node</h2>
+    <p class="text-xs text-slate-400 mb-2">Toggle the switch next to the tunnel name in the WireGuard app, then verify:</p>
+    <pre class="text-xs bg-slate-950 border border-slate-700 rounded p-3 overflow-x-auto">ping -c3 {{stripCIDR .Data.Gateway.WGIP}}</pre>
+    <p class="text-xs text-slate-400 mt-2">Enable <span class="font-mono">On-Demand</span> in the tunnel settings to have the Mac reconnect automatically.</p>
+</div>
+</div>
+
+<div data-os="windows" style="display:none">
+<div class="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-4">
+    <h2 class="text-sm font-semibold mb-2">5. Activate the tunnel on the node</h2>
+    <p class="text-xs text-slate-400 mb-2">Click the tunnel in the list and press <span class="font-mono">Activate</span>. Verify from an Administrator PowerShell:</p>
+    <pre class="text-xs bg-slate-950 border border-slate-700 rounded p-3 overflow-x-auto">ping {{stripCIDR .Data.Gateway.WGIP}}</pre>
+    <p class="text-xs text-slate-400 mt-2">Right-click the WireGuard tray icon → <span class="font-mono">Settings → Start automatically</span> if you want it to reconnect at boot.</p>
+</div>
 </div>
 {{end}}

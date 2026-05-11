@@ -149,6 +149,7 @@ func New(deps Deps) (*Server, error) {
 		gr.Post("/nodes", s.createNode)
 		gr.Get("/nodes/{id}/setup", s.nodeSetup)
 		gr.Get("/nodes/{id}/status", s.nodeStatus)
+		gr.Post("/nodes/{id}/register-pubkey", s.registerNodePubkey)
 		gr.Post("/nodes/{id}/delete", s.deleteNode)
 
 		gr.Get("/forwards", s.listForwards)
@@ -165,6 +166,7 @@ func New(deps Deps) (*Server, error) {
 		gr.Post("/settings", s.postSettings)
 
 		gr.Post("/admin/update", s.postAdminUpdate)
+		gr.Get("/admin/update/status", s.getAdminUpdateStatus)
 	})
 
 	s.Router = r

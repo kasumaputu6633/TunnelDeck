@@ -19,6 +19,7 @@ import (
 	"github.com/kasumaputu6633/tunneldeck/internal/nft"
 	"github.com/kasumaputu6633/tunneldeck/internal/updater"
 	"github.com/kasumaputu6633/tunneldeck/internal/wg"
+	"github.com/kasumaputu6633/tunneldeck/internal/wgops"
 )
 
 // ---- login / logout ----
@@ -309,6 +310,127 @@ func (s *Server) nodeSetup(w http.ResponseWriter, r *http.Request) {
 		Config:         cfg,
 		HasPublicKey:   node.PublicKey != "",
 	}, flashFromQuery(r))
+}
+
+// getAdminUpdateStatus returns a small HTML fragment describing the current
+// self-update state. Polled by the banner's progress panel after the user
+// clicks "Update now". States:
+//
+//   - waiting — the service is about to restart (the 1s-delayed goroutine
+//     hasn't run yet).
+//   - restarting — post doesn't get here because the service has already
+//     torn down before the next poll; the browser's poll will fail for a
+//     few seconds until the new process is listening. That's the "user
+//     knows something is happening" signal.
+//   - up-to-date — the background check has re-run and reports we match
+//     the latest release. This is the "success" state.
+//   - still stale — the background check ran but the local SHA still
+//     differs from remote (which shouldn't happen under normal flow).
+//
+// Because the first post-restart request also triggers a fresh Check(),
+// the banner will go green the moment a poll hits and the new check
+// returns up-to-date.
+func (s *Server) getAdminUpdateStatus(w http.ResponseWriter, r *http.Request) {
+	st, _ := s.updateStatus()
+	// Force a refresh so the caller's next poll reflects reality (useful
+	// right after a service restart when the cached status is still
+	// "stale"). Cheap in the not-available case.
+	if st.UpdateAvailable {
+		go s.refreshUpdateStatus(context.Background())
+	}
+
+	t, ok := s.Templates["admin_update_status"]
+	if !ok {
+		http.Error(w, "unknown fragment", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_ = t.ExecuteTemplate(w, "fragment", st)
+}
+
+// registerNodePubkey takes a node public key pasted in the UI and runs the
+// two gateway-side steps the user would otherwise do via SSH:
+//
+//   1. wg set <iface> peer <pk> allowed-ips <nodeWGIP>/32 persistent-keepalive N
+//   2. append a [Peer] block to /etc/wireguard/<iface>.conf (backup first)
+//
+// Both happen inside RegisterNodePeer with rollback on partial failure.
+// On success we also persist the public key on the nodes row so the UI
+// reflects the peer binding even if the tunnel isn't up yet.
+func (s *Server) registerNodePubkey(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "bad id", http.StatusBadRequest)
+		return
+	}
+
+	nodes, _ := s.Deps.DB.ListNodes(ctx)
+	var node db.Node
+	found := false
+	for _, n := range nodes {
+		if n.ID == id {
+			node = n
+			found = true
+			break
+		}
+	}
+	if !found {
+		http.Error(w, "node not found", http.StatusNotFound)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		http.Redirect(w, r, fmt.Sprintf("/nodes/%d/setup?flash=error:bad+form", id), http.StatusSeeOther)
+		return
+	}
+	pubkey := strings.TrimSpace(r.PostFormValue("public_key"))
+
+	g, err := s.Deps.DB.GetGateway(ctx)
+	if err != nil {
+		http.Redirect(w, r, fmt.Sprintf("/nodes/%d/setup?flash=error:gateway+lookup+failed", id), http.StatusSeeOther)
+		return
+	}
+
+	confPath := "/etc/wireguard/" + g.WGIf + ".conf"
+	res, err := wgops.RegisterNodePeer(ctx, s.Deps.Runner, wgops.AddPeerInput{
+		Iface:     g.WGIf,
+		ConfPath:  confPath,
+		BackupDir: "/var/lib/tunneldeck/backups",
+		NodeName:  node.Name,
+		NodeWGIP:  node.WGIP,
+		PublicKey: pubkey,
+		Keepalive: node.Keepalive,
+	})
+	if err != nil {
+		_ = s.Deps.DB.AuditWrite(ctx, currentActor(r), "node.register-pubkey.fail",
+			fmt.Sprintf("%d", id), fmt.Sprintf(`{"err":%q}`, err.Error()))
+		http.Redirect(w, r, fmt.Sprintf("/nodes/%d/setup?flash=error:register+failed:+%s", id, err.Error()), http.StatusSeeOther)
+		return
+	}
+
+	// Persist public key on the node row so subsequent renders don't ask for it again.
+	if _, err := s.Deps.DB.ExecContext(ctx, `UPDATE nodes SET public_key=? WHERE id=?`, pubkey, id); err != nil {
+		// Non-fatal: runtime peer is already live and persisted; the DB row
+		// is informational. Log via audit and continue.
+		_ = s.Deps.DB.AuditWrite(ctx, currentActor(r), "node.register-pubkey.db-write-failed",
+			fmt.Sprintf("%d", id), fmt.Sprintf(`{"err":%q}`, err.Error()))
+	}
+
+	_ = s.Deps.DB.AuditWrite(ctx, currentActor(r), "node.register-pubkey", fmt.Sprintf("%d", id),
+		fmt.Sprintf(`{"backup":%q,"pubkey_prefix":%q}`, res.BackupPath, shortPubkey(pubkey)))
+
+	http.Redirect(w, r, fmt.Sprintf("/nodes/%d/setup?flash=ok:public+key+registered;+bring+up+the+tunnel+next", id), http.StatusSeeOther)
+}
+
+// shortPubkey returns the first few chars of a WG public key for logs —
+// full keys aren't secret but are long and noisy in audit output.
+func shortPubkey(k string) string {
+	if len(k) < 8 {
+		return k
+	}
+	return k[:8] + "…"
 }
 
 func defaultStr(s, fallback string) string {
@@ -683,40 +805,69 @@ func flashFromQuery(r *http.Request) *Flash {
 }
 
 // postAdminUpdate downloads the latest release, verifies its SHA256,
-// atomically swaps the binary, and restarts the tunneldeck service.
+// atomically swaps the binary, and schedules a service restart.
 //
-// Because the restart pulls the rug out from under the request we can't
-// render a nice response afterward. Instead we run the download + swap
-// synchronously (so SHA mismatch / download errors are visible as a flash
-// message) and fork the restart into a 1s-delayed goroutine, redirecting
-// the user immediately. After restart the banner refreshes on next poll
-// and should disappear.
+// Responds with an HTML fragment (targetted via hx-swap) that polls
+// /admin/update/status every 2 seconds. While the service is restarting
+// the poll will fail briefly — that's the visible "restarting" state to
+// the user. Once the new process is up and the background check re-runs,
+// the fragment flips to "up to date" in green.
 func (s *Server) postAdminUpdate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	if s.Deps.UpdateRepo == "" {
-		http.Redirect(w, r, "/?flash=error:update+not+configured", http.StatusSeeOther)
+		writeUpdateError(w, "update not configured")
 		return
 	}
 	binPath, err := os.Executable()
 	if err != nil {
-		http.Redirect(w, r, "/?flash=error:resolve+binary:+"+err.Error(), http.StatusSeeOther)
+		writeUpdateError(w, "resolve binary: "+err.Error())
 		return
 	}
 
 	res, err := updater.Apply(ctx, s.Deps.UpdateRepo, binPath)
 	if err != nil {
 		_ = s.Deps.DB.AuditWrite(ctx, currentActor(r), "update.fail", "", fmt.Sprintf(`{"err":%q}`, err.Error()))
-		http.Redirect(w, r, "/?flash=error:update+failed:+"+err.Error(), http.StatusSeeOther)
+		writeUpdateError(w, err.Error())
 		return
 	}
 	_ = s.Deps.DB.AuditWrite(ctx, currentActor(r), "update.apply", "",
 		fmt.Sprintf(`{"binary":%q,"backup":%q,"sha":%q}`, res.NewBinaryPath, res.BackupPath, res.NewSHA))
 
-	// Fire restart in background so the current response completes first.
 	go func() {
 		time.Sleep(1 * time.Second)
 		_ = s.Deps.Runner.Run(context.Background(), "systemctl", []string{"restart", "tunneldeck"}, "")
 	}()
 
-	http.Redirect(w, r, "/?flash=ok:update+applied;+restarting+service…", http.StatusSeeOther)
+	// Return a progress widget that htmx will poll until the service is
+	// back and reports up-to-date.
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write([]byte(`
+<div class="rounded border border-amber-800 bg-amber-950 text-amber-200 px-3 py-2 text-sm"
+     hx-get="/admin/update/status"
+     hx-trigger="load delay:2s, every 2s"
+     hx-swap="innerHTML">
+    <div class="flex items-center gap-3">
+        <div class="w-3 h-3 rounded-full bg-amber-400 animate-pulse"></div>
+        <div>
+            <div class="text-sm font-semibold">Applying update…</div>
+            <div class="text-xs text-amber-300/80">new binary installed, service is restarting</div>
+        </div>
+    </div>
+</div>`))
+}
+
+func writeUpdateError(w http.ResponseWriter, msg string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK) // keep htmx swap; surface error inline
+	_, _ = fmt.Fprintf(w, `
+<div class="rounded border border-red-800 bg-red-950 text-red-200 px-3 py-2 text-sm">
+    <div class="font-semibold">Update failed</div>
+    <div class="text-xs text-red-300/80">%s</div>
+    <div class="text-xs text-red-300/60 mt-1">the banner will come back on the next page load</div>
+</div>`, htmlEscape(msg))
+}
+
+func htmlEscape(s string) string {
+	r := strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;", "'", "&#39;")
+	return r.Replace(s)
 }
