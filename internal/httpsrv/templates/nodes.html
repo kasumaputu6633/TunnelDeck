@@ -11,7 +11,9 @@
                 <th class="text-left px-3 py-2">Name</th>
                 <th class="text-left px-3 py-2">WG IP</th>
                 <th class="text-left px-3 py-2">Status</th>
-                <th class="text-left px-3 py-2">Handshake</th>
+                <th class="text-left px-3 py-2">Handshake
+                    <span class="ml-1 text-slate-500 cursor-help" title="WireGuard renews handshakes every ~2 minutes, so this counter resets whenever a refresh occurs — that's normal for an active tunnel.">(?)</span>
+                </th>
                 <th class="text-right px-3 py-2">RX / TX</th>
                 <th class="px-3 py-2"></th>
             </tr>
@@ -31,7 +33,11 @@
                 <td class="px-3 py-2 text-slate-400">{{if .LatestHS}}{{.LatestHS}}{{else}}—{{end}}</td>
                 <td class="px-3 py-2 text-right text-slate-300 font-mono">{{formatBytes .RxBytes}} / {{formatBytes .TxBytes}}</td>
                 <td class="px-3 py-2 text-right">
-                    <form method="POST" action="/nodes/{{.Node.ID}}/delete" onsubmit="return confirm('Delete node {{.Node.Name}}?')">
+                    <a href="/nodes/{{.Node.ID}}/setup"
+                       class="text-xs text-slate-300 hover:text-white">setup</a>
+                    <form method="POST" action="/nodes/{{.Node.ID}}/delete"
+                          onsubmit="return confirm('Delete node {{.Node.Name}}?')"
+                          class="inline ml-3">
                         <input type="hidden" name="csrf" value="{{$.Session.CSRFToken}}">
                         <button class="text-xs text-red-400 hover:text-red-300">delete</button>
                     </form>

@@ -171,7 +171,7 @@ func (s *Server) listNodes(w http.ResponseWriter, r *http.Request) {
 			}
 			row.Online = p.LatestHandshakeUnix >= cutoff
 			if p.LatestHandshakeUnix > 0 {
-				row.LatestHS = time.Since(time.Unix(p.LatestHandshakeUnix, 0)).Truncate(time.Second).String() + " ago"
+				row.LatestHS = formatHandshake(p.LatestHandshakeUnix)
 			} else {
 				row.LatestHS = "never"
 			}
