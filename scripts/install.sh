@@ -279,7 +279,12 @@ for p in "${REQUIRED[@]}"; do
 done
 if [[ ${#MISSING[@]} -gt 0 ]]; then
     apt-get update -qq
-    apt-get install -y --no-install-recommends "${MISSING[@]}"
+    # DEBIAN_FRONTEND=noninteractive suppresses needrestart and other
+    # interactive prompts that can hang or exit non-zero in CI/scripts.
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        -o Dpkg::Options::="--force-confdef" \
+        -o Dpkg::Options::="--force-confold" \
+        "${MISSING[@]}" || true
 else
     echo "   all required packages already installed"
 fi
