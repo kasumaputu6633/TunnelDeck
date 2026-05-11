@@ -37,6 +37,7 @@ set -euo pipefail
 
 MODE=""
 MODE_FROM_FLAG="no"
+BIND_FROM_FLAG=""
 BIND="127.0.0.1"
 PORT="9443"
 STATE_DIR="/var/lib/tunneldeck"
@@ -57,7 +58,7 @@ while [[ $# -gt 0 ]]; do
         --fresh)          MODE="fresh"; MODE_FROM_FLAG="yes"; shift ;;
         --adopt)          MODE="adopt"; MODE_FROM_FLAG="yes"; shift ;;
         --monitor-only)   MODE="monitor-only"; MODE_FROM_FLAG="yes"; shift ;;
-        --bind)           BIND="$2"; shift 2 ;;
+        --bind)           BIND="$2"; BIND_FROM_FLAG="yes"; shift 2 ;;
         --port)           PORT="$2"; shift 2 ;;
         --binary)         BIN_SOURCE="$2"; shift 2 ;;
         --release)        RELEASE_TAG="$2"; shift 2 ;;
@@ -176,6 +177,32 @@ choose_mode_interactive() {
     esac
 }
 
+# Prompt the user to choose where the Web UI binds.
+# Skipped when --bind was passed explicitly or when stdin isn't a TTY.
+choose_bind_interactive() {
+    [[ -n "$BIND_FROM_FLAG" ]] && return 0
+    [[ ! -t 0 ]] && return 0
+    [[ "$ASSUME_YES" == "yes" ]] && return 0
+
+    echo
+    echo "Where should the Web UI listen?"
+    echo "  1) 127.0.0.1:${PORT}  — localhost only (recommended)"
+    echo "     Access via: ssh -L ${PORT}:127.0.0.1:${PORT} <user>@<this-host>"
+    echo "  2) 0.0.0.0:${PORT}    — all interfaces (accessible from your browser directly)"
+    echo "     WARNING: the UI will be reachable on the public IP without TLS."
+    echo "     Only choose this if you understand the risk or are behind a firewall."
+    echo
+    local choice
+    read -r -p "Selection [1]: " choice || true
+    choice="${choice:-1}"
+
+    case "$choice" in
+        1|localhost|127*) BIND="127.0.0.1" ;;
+        2|0.0.0.0|public) BIND="0.0.0.0" ;;
+        *) echo "unrecognized choice, defaulting to 127.0.0.1"; BIND="127.0.0.1" ;;
+    esac
+}
+
 # Confirm before running a destructive mode. Skipped for monitor-only,
 # when -y was passed, when stdin isn't a TTY (curl|bash can't prompt),
 # or when the mode was passed explicitly via CLI flag — an explicit flag
@@ -228,6 +255,7 @@ if [[ -z "$MODE" ]]; then
 fi
 
 confirm_mode
+choose_bind_interactive
 
 # --- Install --------------------------------------------------------------
 
@@ -347,11 +375,12 @@ systemctl enable --now tunneldeck.service
 
 # Grab the one-time admin password from the service log. On first boot
 # TunnelDeck prints a "=== TunnelDeck first-run ===" block to stdout,
-# which systemd captures. We wait up to ~5s for it to appear.
+# which systemd captures. We retry for up to 15s because journald may
+# take a moment to index the new unit's output.
 ADMIN_PASSWORD=""
-for _ in 1 2 3 4 5; do
-    ADMIN_PASSWORD=$(journalctl -u tunneldeck.service --no-pager 2>/dev/null \
-        | awk '/^password:/ { print $2; exit }')
+for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+    ADMIN_PASSWORD=$(journalctl -u tunneldeck.service --no-pager -n 50 2>/dev/null \
+        | grep -oP '(?<=password: )[a-f0-9]+' | head -1)
     [[ -n "$ADMIN_PASSWORD" ]] && break
     sleep 1
 done
