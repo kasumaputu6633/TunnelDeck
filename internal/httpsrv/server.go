@@ -71,19 +71,17 @@ func (s *Server) updateStatus() (updater.Status, time.Time) {
 }
 
 // StartBackgroundChecks kicks off goroutines that refresh the update cache.
-// The first check fires 30s after boot to let the service settle; subsequent
-// checks run every 6 hours. Safe to call once from main after New().
+// The first check fires after a short delay to let the service settle;
+// subsequent checks run every 6 hours. Safe to call once from main after New().
 func (s *Server) StartBackgroundChecks(ctx context.Context) {
 	if s.Deps.UpdateRepo == "" {
 		return
 	}
 	go func() {
-		// initial delay so boot logs stay clean
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(30 * time.Second):
-		}
+		// Run the first check immediately so the banner appears on first
+		// page load rather than waiting 30s. The 30s delay was causing
+		// the banner to never show if the user opened the UI before the
+		// check completed.
 		s.refreshUpdateStatus(ctx)
 
 		t := time.NewTicker(6 * time.Hour)
