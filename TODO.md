@@ -157,6 +157,11 @@ CSV export.
 When install.sh detects an existing install:
 - If binary version differs: prompt "Update from vX.Y.Z → vA.B.C?"
 - If /etc/tunneldeck/settings has changed schema: run migrations.
+- If the shipped systemd unit has changed (e.g. new ReadWritePaths
+  needed for self-update, or new hardening directives we decide to
+  tighten) show a diff vs the running unit and offer to overwrite
+  after confirmation. Today users have to patch the unit manually
+  when we change it.
 - If systemd unit changed: show diff, let user accept.
 
 ### `--adopt` should auto-run adoption on first boot
