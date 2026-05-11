@@ -28,7 +28,7 @@
             <tr class="border-t border-slate-700 hover:bg-slate-700/30 transition-colors">
                 <td class="px-3 py-1 text-slate-400 font-mono text-xs">{{.TS.Format "2006-01-02 15:04:05"}}</td>
                 <td class="px-3 py-1 text-xs">{{.Actor}}</td>
-                <td class="px-3 py-1 text-emerald-300 font-mono text-xs">{{.Action}}</td>
+                <td class="px-3 py-1 text-emerald-300 font-mono text-xs">{{friendlyAction .Action}}</td>
                 <td class="px-3 py-1 font-mono text-xs">{{.Target}}</td>
                 <td class="px-3 py-1 text-xs text-slate-400 font-mono truncate max-w-xs">{{.Detail}}</td>
             </tr>

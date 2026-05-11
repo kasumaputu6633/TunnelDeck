@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"time"
 )
 
@@ -62,7 +63,7 @@ func (d *DB) ListNodesPage(ctx context.Context, p Page) ([]Node, PageResult, err
 		return nil, PageResult{}, err
 	}
 	rows, err := d.QueryContext(ctx, `
-		SELECT id, name, wg_ip, public_key, endpoint_hint, keepalive, adopted, created_at
+		SELECT id, name, wg_ip, public_key, endpoint_hint, keepalive, adopted, last_seen_at, created_at
 		FROM nodes
 		ORDER BY wg_ip
 		LIMIT ? OFFSET ?
@@ -77,11 +78,16 @@ func (d *DB) ListNodesPage(ctx context.Context, p Page) ([]Node, PageResult, err
 		var n Node
 		var adopted int
 		var createdAt int64
-		if err := rows.Scan(&n.ID, &n.Name, &n.WGIP, &n.PublicKey, &n.EndpointHint, &n.Keepalive, &adopted, &createdAt); err != nil {
+		var lastSeen sql.NullInt64
+		if err := rows.Scan(&n.ID, &n.Name, &n.WGIP, &n.PublicKey, &n.EndpointHint, &n.Keepalive, &adopted, &lastSeen, &createdAt); err != nil {
 			return nil, PageResult{}, err
 		}
 		n.Adopted = adopted != 0
 		n.CreatedAt = time.Unix(createdAt, 0)
+		if lastSeen.Valid {
+			t := time.Unix(lastSeen.Int64, 0)
+			n.LastSeenAt = &t
+		}
 		out = append(out, n)
 	}
 	return out, NewPageResult(p, total), rows.Err()

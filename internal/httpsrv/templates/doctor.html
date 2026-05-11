@@ -1,0 +1,55 @@
+{{define "content"}}
+<div class="flex items-center justify-between mb-4">
+    <div>
+        <h1 class="text-lg font-semibold">Doctor</h1>
+        <p class="text-xs text-slate-500 mt-0.5">Diagnostic checks for this gateway host.</p>
+    </div>
+    <a href="/doctor" class="text-xs text-slate-400 hover:text-white border border-slate-700 rounded px-2 py-1">Re-run</a>
+</div>
+
+<div class="bg-slate-800 border border-slate-700 rounded-lg overflow-hidden">
+    <table class="w-full text-sm">
+        <thead class="text-xs text-slate-400 bg-slate-900">
+            <tr>
+                <th class="text-left px-3 py-2 w-20">Status</th>
+                <th class="text-left px-3 py-2 w-48">Check</th>
+                <th class="text-left px-3 py-2">Detail</th>
+            </tr>
+        </thead>
+        <tbody>
+        {{range .Data.Results}}
+            <tr class="border-t border-slate-700 hover:bg-slate-700/30 transition-colors">
+                <td class="px-3 py-2">
+                    {{if eq .Level "ok"}}
+                    <span class="inline-flex items-center gap-1 text-emerald-400 text-xs font-medium">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block"></span>ok
+                    </span>
+                    {{else if eq .Level "warn"}}
+                    <span class="inline-flex items-center gap-1 text-amber-400 text-xs font-medium">
+                        <span class="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block"></span>warn
+                    </span>
+                    {{else if eq .Level "error"}}
+                    <span class="inline-flex items-center gap-1 text-red-400 text-xs font-medium">
+                        <span class="w-1.5 h-1.5 rounded-full bg-red-400 inline-block"></span>error
+                    </span>
+                    {{else}}
+                    <span class="inline-flex items-center gap-1 text-slate-400 text-xs font-medium">
+                        <span class="w-1.5 h-1.5 rounded-full bg-slate-500 inline-block"></span>info
+                    </span>
+                    {{end}}
+                </td>
+                <td class="px-3 py-2 font-mono text-xs text-slate-300">{{.Name}}</td>
+                <td class="px-3 py-2 text-xs text-slate-400">{{.Detail}}</td>
+            </tr>
+        {{end}}
+        </tbody>
+    </table>
+</div>
+
+<div class="mt-4 text-xs text-slate-500">
+    These checks run on the gateway host. Warnings don't necessarily mean something is broken —
+    for example, <span class="font-mono">ufw: active</span> is informational only.
+    Errors (like <span class="font-mono">ip_forward: disabled</span>) need to be fixed for
+    TunnelDeck to work correctly.
+</div>
+{{end}}

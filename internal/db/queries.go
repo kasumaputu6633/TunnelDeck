@@ -16,6 +16,7 @@ type Node struct {
 	EndpointHint string
 	Keepalive    int
 	Adopted      bool
+	LastSeenAt   *time.Time
 	CreatedAt    time.Time
 }
 
@@ -106,7 +107,7 @@ func (d *DB) CreateNode(ctx context.Context, n Node) (int64, error) {
 
 func (d *DB) ListNodes(ctx context.Context) ([]Node, error) {
 	rows, err := d.QueryContext(ctx, `
-		SELECT id, name, wg_ip, public_key, endpoint_hint, keepalive, adopted, created_at
+		SELECT id, name, wg_ip, public_key, endpoint_hint, keepalive, adopted, last_seen_at, created_at
 		FROM nodes ORDER BY wg_ip
 	`)
 	if err != nil {
@@ -118,11 +119,16 @@ func (d *DB) ListNodes(ctx context.Context) ([]Node, error) {
 		var n Node
 		var adopted int
 		var createdAt int64
-		if err := rows.Scan(&n.ID, &n.Name, &n.WGIP, &n.PublicKey, &n.EndpointHint, &n.Keepalive, &adopted, &createdAt); err != nil {
+		var lastSeen sql.NullInt64
+		if err := rows.Scan(&n.ID, &n.Name, &n.WGIP, &n.PublicKey, &n.EndpointHint, &n.Keepalive, &adopted, &lastSeen, &createdAt); err != nil {
 			return nil, err
 		}
 		n.Adopted = adopted != 0
 		n.CreatedAt = time.Unix(createdAt, 0)
+		if lastSeen.Valid {
+			t := time.Unix(lastSeen.Int64, 0)
+			n.LastSeenAt = &t
+		}
 		out = append(out, n)
 	}
 	return out, rows.Err()
@@ -132,15 +138,20 @@ func (d *DB) GetNodeByWGIP(ctx context.Context, wgIP string) (Node, error) {
 	var n Node
 	var adopted int
 	var createdAt int64
+	var lastSeen sql.NullInt64
 	err := d.QueryRowContext(ctx, `
-		SELECT id, name, wg_ip, public_key, endpoint_hint, keepalive, adopted, created_at
+		SELECT id, name, wg_ip, public_key, endpoint_hint, keepalive, adopted, last_seen_at, created_at
 		FROM nodes WHERE wg_ip=?
-	`, wgIP).Scan(&n.ID, &n.Name, &n.WGIP, &n.PublicKey, &n.EndpointHint, &n.Keepalive, &adopted, &createdAt)
+	`, wgIP).Scan(&n.ID, &n.Name, &n.WGIP, &n.PublicKey, &n.EndpointHint, &n.Keepalive, &adopted, &lastSeen, &createdAt)
 	if err != nil {
 		return n, err
 	}
 	n.Adopted = adopted != 0
 	n.CreatedAt = time.Unix(createdAt, 0)
+	if lastSeen.Valid {
+		t := time.Unix(lastSeen.Int64, 0)
+		n.LastSeenAt = &t
+	}
 	return n, nil
 }
 
@@ -148,16 +159,28 @@ func (d *DB) GetNodeByPublicKey(ctx context.Context, pk string) (Node, error) {
 	var n Node
 	var adopted int
 	var createdAt int64
+	var lastSeen sql.NullInt64
 	err := d.QueryRowContext(ctx, `
-		SELECT id, name, wg_ip, public_key, endpoint_hint, keepalive, adopted, created_at
+		SELECT id, name, wg_ip, public_key, endpoint_hint, keepalive, adopted, last_seen_at, created_at
 		FROM nodes WHERE public_key=?
-	`, pk).Scan(&n.ID, &n.Name, &n.WGIP, &n.PublicKey, &n.EndpointHint, &n.Keepalive, &adopted, &createdAt)
+	`, pk).Scan(&n.ID, &n.Name, &n.WGIP, &n.PublicKey, &n.EndpointHint, &n.Keepalive, &adopted, &lastSeen, &createdAt)
 	if err != nil {
 		return n, err
 	}
 	n.Adopted = adopted != 0
 	n.CreatedAt = time.Unix(createdAt, 0)
+	if lastSeen.Valid {
+		t := time.Unix(lastSeen.Int64, 0)
+		n.LastSeenAt = &t
+	}
 	return n, nil
+}
+
+// UpdateNodeLastSeen records the current time as last_seen_at for the node
+// with the given WG IP. Called by the nodes handler whenever a live peer
+// handshake is detected. Best-effort: errors are silently ignored.
+func (d *DB) UpdateNodeLastSeen(ctx context.Context, wgIP string) {
+	_, _ = d.ExecContext(ctx, `UPDATE nodes SET last_seen_at=? WHERE wg_ip=?`, time.Now().Unix(), wgIP)
 }
 
 func (d *DB) DeleteNode(ctx context.Context, id int64) error {

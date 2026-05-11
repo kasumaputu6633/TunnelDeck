@@ -18,6 +18,22 @@
     </div>
 </div>
 
+{{if .Data.Pending.HasPending}}
+<div class="bg-amber-950 border border-amber-700 rounded-lg px-3 py-2 mb-4 flex items-center gap-3 flex-wrap text-sm">
+    <span class="text-amber-300 font-semibold">⚠ Unapplied changes</span>
+    {{if .Data.Pending.Missing}}
+    <span class="text-amber-200 text-xs">not in nft yet: {{range .Data.Pending.Missing}}<span class="font-mono bg-amber-900 px-1 rounded mr-1">{{.}}</span>{{end}}</span>
+    {{end}}
+    {{if .Data.Pending.Stale}}
+    <span class="text-amber-200 text-xs">stale in nft: {{range .Data.Pending.Stale}}<span class="font-mono bg-amber-900 px-1 rounded mr-1">{{.}}</span>{{end}}</span>
+    {{end}}
+    <form method="POST" action="/forwards/apply" class="ml-auto">
+        <input type="hidden" name="csrf" value="{{.Session.CSRFToken}}">
+        <button class="bg-amber-600 hover:bg-amber-500 text-white text-xs font-medium rounded px-2 py-1">Apply now</button>
+    </form>
+</div>
+{{end}}
+
 {{if .Data.ApplyPreview}}
 <div class="bg-slate-950 border border-slate-700 rounded-lg p-3 mb-4">
     <div class="text-xs text-slate-400 mb-2">Rendered nftables (dry-run):</div>
@@ -109,12 +125,14 @@
                 <option value="tcp" {{if eq .Data.Form.Proto "tcp"}}selected{{end}}>TCP</option>
                 <option value="udp" {{if eq .Data.Form.Proto "udp"}}selected{{end}}>UDP</option>
             </select>
+            <p class="text-xs text-slate-500 mt-1">TCP for most services (web, SSH, Minecraft Java). UDP for Minecraft Bedrock, game servers, VoIP.</p>
         </div>
         <div>
             <label class="block text-xs text-slate-400 mb-1">Public port (gateway)</label>
             <input type="number" name="public_port" required min="1" max="65535"
                    value="{{if .Data.Form.PublicPort}}{{.Data.Form.PublicPort}}{{end}}"
                    class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2">
+            <p class="text-xs text-slate-500 mt-1">The port players/clients connect to on this gateway's public IP. Must be unique per protocol.</p>
         </div>
         <div>
             <label class="block text-xs text-slate-400 mb-1">Target node</label>
@@ -124,12 +142,14 @@
                     <option value="{{.ID}}" {{if eq $.Data.Form.NodeID .ID}}selected{{end}}>{{.Name}} ({{.WGIP}})</option>
                 {{end}}
             </select>
+            <p class="text-xs text-slate-500 mt-1">The node (home server / backend) that will receive the traffic through the WireGuard tunnel.</p>
         </div>
         <div>
             <label class="block text-xs text-slate-400 mb-1">Target port (on node)</label>
             <input type="number" name="target_port" required min="1" max="65535"
                    value="{{if .Data.Form.TargetPort}}{{.Data.Form.TargetPort}}{{end}}"
                    class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2">
+            <p class="text-xs text-slate-500 mt-1">The port the service is listening on inside the node. Can be the same as the public port or different.</p>
         </div>
         <div class="col-span-2">
             <label class="block text-xs text-slate-400 mb-1">Description</label>

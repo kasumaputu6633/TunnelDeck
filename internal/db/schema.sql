@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS nodes (
     endpoint_hint  TEXT    NOT NULL DEFAULT '',
     keepalive      INTEGER NOT NULL DEFAULT 25,
     adopted        INTEGER NOT NULL DEFAULT 0,
+    last_seen_at   INTEGER,
     created_at     INTEGER NOT NULL
 );
 

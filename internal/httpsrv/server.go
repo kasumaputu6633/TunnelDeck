@@ -166,6 +166,7 @@ func New(deps Deps) (*Server, error) {
 
 		gr.Get("/logs", s.logs)
 		gr.Get("/logs/fragment", s.logsFragment)
+		gr.Get("/doctor", s.doctorPage)
 		gr.Get("/settings", s.getSettings)
 		gr.Post("/settings", s.postSettings)
 
@@ -192,6 +193,24 @@ func parseTemplates() (map[string]*template.Template, error) {
 		"formatHandshake": formatHandshake,
 		"add":             func(a, b int) int { return a + b },
 		"sub":             func(a, b int) int { return a - b },
+		"friendlyAction": func(action string) string {			m := map[string]string{
+				"gateway.adopt":          "Gateway adopted",
+				"nft.apply":              "nftables applied",
+				"node.add":               "Node added",
+				"node.delete":            "Node deleted",
+				"node.register-pubkey":   "Node public key registered",
+				"forward.add":            "Forward added",
+				"forward.delete":         "Forward deleted",
+				"forward.toggle":         "Forward toggled",
+				"settings.update":        "Settings updated",
+				"update.apply":           "Binary updated",
+				"update.fail":            "Update failed",
+			}
+			if v, ok := m[action]; ok {
+				return v
+			}
+			return action
+		},
 		"seq": func(start, end int) []int {
 			if end < start {
 				return nil

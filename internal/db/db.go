@@ -10,6 +10,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -56,7 +57,22 @@ func (d *DB) migrate(ctx context.Context) error {
 	if errors.Is(err, sql.ErrNoRows) {
 		_, err = d.ExecContext(ctx, `INSERT INTO schema_version(version, applied_at) VALUES (1, ?)`, time.Now().Unix())
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	// v2: add last_seen_at to nodes (existing DBs won't have it).
+	var v2 int
+	err2 := d.QueryRowContext(ctx, `SELECT version FROM schema_version WHERE version=2`).Scan(&v2)
+	if errors.Is(err2, sql.ErrNoRows) {
+		if _, err := d.ExecContext(ctx, `ALTER TABLE nodes ADD COLUMN last_seen_at INTEGER`); err != nil {
+			// Column may already exist if schema.sql was applied fresh — ignore.
+			if !strings.Contains(err.Error(), "duplicate column") {
+				return fmt.Errorf("migrate v2: %w", err)
+			}
+		}
+		_, _ = d.ExecContext(ctx, `INSERT INTO schema_version(version, applied_at) VALUES (2, ?)`, time.Now().Unix())
+	}
+	return nil
 }
 
 // EnsureGatewayRow seeds the singleton gateway row if absent. Called once at

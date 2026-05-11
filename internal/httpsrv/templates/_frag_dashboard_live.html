@@ -58,7 +58,7 @@
         {{range .RecentAudit}}
             <li><span class="text-slate-500">{{.TS.Format "2006-01-02 15:04:05"}}</span>
                 <span class="text-slate-300">{{.Actor}}</span>
-                <span class="text-emerald-300">{{.Action}}</span>
+                <span class="text-emerald-300">{{friendlyAction .Action}}</span>
                 <span class="text-slate-400">{{.Target}}</span></li>
         {{end}}
         </ul>

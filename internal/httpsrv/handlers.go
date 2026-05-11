@@ -14,6 +14,7 @@ import (
 	"github.com/kasumaputu6633/tunneldeck/internal/adopt"
 	"github.com/kasumaputu6633/tunneldeck/internal/auth"
 	"github.com/kasumaputu6633/tunneldeck/internal/db"
+	"github.com/kasumaputu6633/tunneldeck/internal/doctor"
 	"github.com/kasumaputu6633/tunneldeck/internal/forwards"
 	"github.com/kasumaputu6633/tunneldeck/internal/inspect"
 	"github.com/kasumaputu6633/tunneldeck/internal/nft"
@@ -152,11 +153,12 @@ type nodesData struct {
 }
 
 type nodeRow struct {
-	Node          db.Node
-	Online        bool
-	LatestHS      string
-	RxBytes       int64
-	TxBytes       int64
+	Node       db.Node
+	Online     bool
+	LatestHS   string
+	LastSeen   string // human-readable "last seen X ago" for offline nodes
+	RxBytes    int64
+	TxBytes    int64
 }
 
 type nodeSetup struct {
@@ -182,11 +184,17 @@ func (s *Server) listNodes(w http.ResponseWriter, r *http.Request) {
 			if wg.FirstAllowedHost(peer) != n.WGIP {
 				continue
 			}
-			row.Online = peer.LatestHandshakeUnix >= cutoff
+				row.Online = peer.LatestHandshakeUnix >= cutoff
 			if peer.LatestHandshakeUnix > 0 {
 				row.LatestHS = formatHandshake(peer.LatestHandshakeUnix)
+				if peer.LatestHandshakeUnix >= cutoff {
+					s.Deps.DB.UpdateNodeLastSeen(ctx, n.WGIP)
+				}
 			} else {
 				row.LatestHS = "never"
+			}
+			if !row.Online && n.LastSeenAt != nil {
+				row.LastSeen = formatHandshake(n.LastSeenAt.Unix())
 			}
 			row.RxBytes = peer.RxBytes
 			row.TxBytes = peer.TxBytes
@@ -231,11 +239,17 @@ func (s *Server) nodesFragment(w http.ResponseWriter, r *http.Request) {
 			if wg.FirstAllowedHost(peer) != n.WGIP {
 				continue
 			}
-			row.Online = peer.LatestHandshakeUnix >= cutoff
+				row.Online = peer.LatestHandshakeUnix >= cutoff
 			if peer.LatestHandshakeUnix > 0 {
 				row.LatestHS = formatHandshake(peer.LatestHandshakeUnix)
+				if peer.LatestHandshakeUnix >= cutoff {
+					s.Deps.DB.UpdateNodeLastSeen(ctx, n.WGIP)
+				}
 			} else {
 				row.LatestHS = "never"
+			}
+			if !row.Online && n.LastSeenAt != nil {
+				row.LastSeen = formatHandshake(n.LastSeenAt.Unix())
 			}
 			row.RxBytes = peer.RxBytes
 			row.TxBytes = peer.TxBytes
@@ -586,6 +600,7 @@ type forwardsData struct {
 	ApplyPreview string
 	Pagination   db.PageResult
 	Counters     map[int64]nft.RuleCounter
+	Pending      nft.PendingState
 }
 
 func (s *Server) listForwards(w http.ResponseWriter, r *http.Request) {
@@ -595,12 +610,22 @@ func (s *Server) listForwards(w http.ResponseWriter, r *http.Request) {
 	fwds, pr, _ := s.Deps.DB.ListForwardsWithNodePage(ctx, p)
 	nodes, _ := s.Deps.DB.ListNodes(ctx)
 	counters, _ := s.Deps.NFT.CountersByForwardID(ctx, g.ManagedNFTTable)
+
+	// Build summary for pending-check (all forwards, not just current page).
+	allFwds, _ := s.Deps.DB.ListForwardsWithNode(ctx)
+	summaries := make([]nft.DBForwardSummary, len(allFwds))
+	for i, f := range allFwds {
+		summaries[i] = nft.DBForwardSummary{ID: f.ID, Proto: f.Proto, PublicPort: f.PublicPort, Enabled: f.Enabled}
+	}
+	pending := s.Deps.NFT.CheckPending(ctx, summaries, g.ManagedNFTTable)
+
 	s.render(w, r, "forwards", "Forwards", forwardsData{
 		Gateway:    g,
 		Forwards:   fwds,
 		Nodes:      nodes,
 		Pagination: pr,
 		Counters:   counters,
+		Pending:    pending,
 	}, flashFromQuery(r))
 }
 
@@ -787,7 +812,16 @@ func (s *Server) postAdopt(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/?flash=ok:"+msg, http.StatusSeeOther)
 }
 
-// ---- logs ----
+// ---- doctor ----
+
+type doctorData struct {
+	Results []doctor.Result
+}
+
+func (s *Server) doctorPage(w http.ResponseWriter, r *http.Request) {
+	results := doctor.Run(r.Context(), s.Deps.Runner)
+	s.render(w, r, "doctor", "Doctor", doctorData{Results: results}, nil)
+}
 
 type logsData struct {
 	Audit      []db.AuditEntry
