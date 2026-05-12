@@ -65,12 +65,23 @@ func (d *DB) migrate(ctx context.Context) error {
 	err2 := d.QueryRowContext(ctx, `SELECT version FROM schema_version WHERE version=2`).Scan(&v2)
 	if errors.Is(err2, sql.ErrNoRows) {
 		if _, err := d.ExecContext(ctx, `ALTER TABLE nodes ADD COLUMN last_seen_at INTEGER`); err != nil {
-			// Column may already exist if schema.sql was applied fresh — ignore.
 			if !strings.Contains(err.Error(), "duplicate column") {
 				return fmt.Errorf("migrate v2: %w", err)
 			}
 		}
 		_, _ = d.ExecContext(ctx, `INSERT INTO schema_version(version, applied_at) VALUES (2, ?)`, time.Now().Unix())
+	}
+
+	// v3: add must_change_password to users.
+	var v3 int
+	err3 := d.QueryRowContext(ctx, `SELECT version FROM schema_version WHERE version=3`).Scan(&v3)
+	if errors.Is(err3, sql.ErrNoRows) {
+		if _, err := d.ExecContext(ctx, `ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 1`); err != nil {
+			if !strings.Contains(err.Error(), "duplicate column") {
+				return fmt.Errorf("migrate v3: %w", err)
+			}
+		}
+		_, _ = d.ExecContext(ctx, `INSERT INTO schema_version(version, applied_at) VALUES (3, ?)`, time.Now().Unix())
 	}
 	return nil
 }

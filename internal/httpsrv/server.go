@@ -45,6 +45,9 @@ type Deps struct {
 	// Version is the build-time version string (main.version). Used by the
 	// update check to compare against GitHub release tags.
 	Version string
+	// CredentialsPath is the path to the first-run credentials file.
+	// Shown on the login page until the user changes their password.
+	CredentialsPath string
 }
 
 // Server holds the router plus a per-page template map. One template tree per
@@ -145,6 +148,13 @@ func New(deps Deps) (*Server, error) {
 
 		gr.Get("/", s.dashboard)
 		gr.Get("/dashboard/fragment", s.dashboardFragment)
+
+		// Force password change on first login — redirect all pages except
+		// /settings/password to the change-password form.
+		gr.Use(s.mustChangePasswordMW)
+
+		gr.Get("/settings/password", s.getChangePassword)
+		gr.Post("/settings/password", s.postChangePassword)
 		gr.Get("/nodes", s.listNodes)
 		gr.Get("/nodes/fragment", s.nodesFragment)
 		gr.Post("/nodes", s.createNode)

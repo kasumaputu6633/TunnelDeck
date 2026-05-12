@@ -107,13 +107,14 @@ func runServe(args []string) {
 	}
 
 	authSvc := &auth.Service{DB: database}
-	if pw, err := authSvc.EnsureAdmin(ctx, "admin"); err != nil {
+	credPath := filepath.Join(cfg.ConfigDir, "credentials")
+	if pw, err := authSvc.EnsureAdmin(ctx, "admin", credPath); err != nil {
 		die("ensure admin: ", err)
 	} else if pw != "" {
 		fmt.Println("=== TunnelDeck first-run ===")
 		fmt.Println("username: admin")
 		fmt.Println("password:", pw)
-		fmt.Println("Save this now; it won't be displayed again.")
+		fmt.Println("credentials also saved to:", credPath)
 		fmt.Println("============================")
 	}
 
@@ -138,14 +139,15 @@ func runServe(args []string) {
 
 	runner := sysexec.ExecRunner{}
 	server, err := httpsrv.New(httpsrv.Deps{
-		DB:         database,
-		Auth:       authSvc,
-		NFT:        nft.Client{Runner: runner},
-		Runner:     runner,
-		TLSOn:      false,
-		DryRunNFT:  *dryNFT,
-		UpdateRepo: "kasumaputu6633/tunneldeck",
-		Version:    version,
+		DB:              database,
+		Auth:            authSvc,
+		NFT:             nft.Client{Runner: runner},
+		Runner:          runner,
+		TLSOn:           false,
+		DryRunNFT:       *dryNFT,
+		UpdateRepo:      "kasumaputu6633/tunneldeck",
+		Version:         version,
+		CredentialsPath: credPath,
 	})
 	if err != nil {
 		die("build server: ", err)

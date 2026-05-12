@@ -8,7 +8,10 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -39,7 +42,9 @@ func HashPassword(pw string) (string, error) {
 
 // EnsureAdmin creates the admin account on first boot. Returns the generated
 // password if created, "" if the user already existed.
-func (s *Service) EnsureAdmin(ctx context.Context, username string) (string, error) {
+// Also writes /etc/tunneldeck/credentials (or stateDir/credentials on non-Linux)
+// so the login page can display it without requiring journalctl.
+func (s *Service) EnsureAdmin(ctx context.Context, username, credentialsPath string) (string, error) {
 	var count int
 	if err := s.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&count); err != nil {
 		return "", err
@@ -47,19 +52,24 @@ func (s *Service) EnsureAdmin(ctx context.Context, username string) (string, err
 	if count > 0 {
 		return "", nil
 	}
-	pw, err := randomHex(12)
-	if err != nil {
-		return "", err
-	}
+	pw := "tunneldeck" // default password shown on login page
 	hash, err := HashPassword(pw)
 	if err != nil {
 		return "", err
 	}
 	_, err = s.DB.ExecContext(ctx, `
-		INSERT INTO users (username, pwhash, created_at) VALUES (?, ?, ?)
+		INSERT INTO users (username, pwhash, must_change_password, created_at) VALUES (?, ?, 1, ?)
 	`, username, hash, time.Now().Unix())
 	if err != nil {
 		return "", err
+	}
+
+	// Write credentials file so the login page can display them without
+	// requiring the user to run journalctl.
+	if credentialsPath != "" {
+		_ = os.MkdirAll(filepath.Dir(credentialsPath), 0o750)
+		content := fmt.Sprintf("username: %s\npassword: %s\n", username, pw)
+		_ = os.WriteFile(credentialsPath, []byte(content), 0o640)
 	}
 	return pw, nil
 }
@@ -73,10 +83,10 @@ func (s *Service) Login(ctx context.Context, username, password, ip string) (str
 
 	var userID int64
 	var hash string
-	err := s.DB.QueryRowContext(ctx, `SELECT id, pwhash FROM users WHERE username=?`, username).Scan(&userID, &hash)
+	var mustChange int
+	err := s.DB.QueryRowContext(ctx, `SELECT id, pwhash, must_change_password FROM users WHERE username=?`, username).Scan(&userID, &hash, &mustChange)
 	if err != nil {
 		s.recordAttempt(ctx, ip, false)
-		// Dummy compare to reduce timing-based user enumeration.
 		_ = bcrypt.CompareHashAndPassword([]byte("$2a$12$......................................................"), []byte(password))
 		return "", "", errors.New("invalid credentials")
 	}
@@ -106,11 +116,12 @@ func (s *Service) Login(ctx context.Context, username, password, ip string) (str
 }
 
 type Session struct {
-	ID        string
-	UserID    int64
-	Username  string
-	CSRFToken string
-	ExpiresAt time.Time
+	ID                 string
+	UserID             int64
+	Username           string
+	CSRFToken          string
+	ExpiresAt          time.Time
+	MustChangePassword bool
 }
 
 // Lookup resolves a session cookie value. Returns (nil, nil) for missing or
@@ -121,11 +132,12 @@ func (s *Service) Lookup(ctx context.Context, sid string) (*Session, error) {
 	}
 	var sess Session
 	var expires int64
+	var mustChange int
 	err := s.DB.QueryRowContext(ctx, `
-		SELECT s.id, s.user_id, u.username, s.csrf_token, s.expires_at
+		SELECT s.id, s.user_id, u.username, s.csrf_token, s.expires_at, u.must_change_password
 		FROM sessions s JOIN users u ON u.id = s.user_id
 		WHERE s.id=?
-	`, sid).Scan(&sess.ID, &sess.UserID, &sess.Username, &sess.CSRFToken, &expires)
+	`, sid).Scan(&sess.ID, &sess.UserID, &sess.Username, &sess.CSRFToken, &expires, &mustChange)
 	if err != nil {
 		return nil, nil
 	}
@@ -134,7 +146,31 @@ func (s *Service) Lookup(ctx context.Context, sid string) (*Session, error) {
 		_, _ = s.DB.ExecContext(ctx, `DELETE FROM sessions WHERE id=?`, sid)
 		return nil, nil
 	}
+	sess.MustChangePassword = mustChange != 0
 	return &sess, nil
+}
+
+// ChangePassword updates the user's password and clears must_change_password.
+// Also deletes the credentials file if it exists.
+func (s *Service) ChangePassword(ctx context.Context, userID int64, newPW, credentialsPath string) error {
+	if len(newPW) < 8 {
+		return errors.New("password must be at least 8 characters")
+	}
+	hash, err := HashPassword(newPW)
+	if err != nil {
+		return err
+	}
+	_, err = s.DB.ExecContext(ctx, `
+		UPDATE users SET pwhash=?, must_change_password=0 WHERE id=?
+	`, hash, userID)
+	if err != nil {
+		return err
+	}
+	// Remove the credentials file — it's no longer needed.
+	if credentialsPath != "" {
+		_ = os.Remove(credentialsPath)
+	}
+	return nil
 }
 
 func (s *Service) Logout(ctx context.Context, sid string) error {

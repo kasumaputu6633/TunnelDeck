@@ -25,14 +25,32 @@ import (
 
 // ---- login / logout ----
 
-type loginData struct{ Error string }
+type loginData struct {
+	Error       string
+	DefaultUser string
+	DefaultPass string
+}
 
 func (s *Server) getLogin(w http.ResponseWriter, r *http.Request) {
 	if sessionFromCtx(r.Context()) != nil {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
-	s.render(w, r, "login", "Sign in", loginData{}, nil)
+	d := loginData{}
+	// Read credentials file if it exists — show default credentials on login page.
+	if s.Deps.CredentialsPath != "" {
+		if b, err := os.ReadFile(s.Deps.CredentialsPath); err == nil {
+			for _, line := range strings.Split(string(b), "\n") {
+				if strings.HasPrefix(line, "username: ") {
+					d.DefaultUser = strings.TrimPrefix(line, "username: ")
+				}
+				if strings.HasPrefix(line, "password: ") {
+					d.DefaultPass = strings.TrimPrefix(line, "password: ")
+				}
+			}
+		}
+	}
+	s.render(w, r, "login", "Sign in", d, nil)
 }
 
 func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
@@ -857,6 +875,46 @@ type settingsData struct{ Gateway db.Gateway }
 func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) {
 	g, _ := s.Deps.DB.GetGateway(r.Context())
 	s.render(w, r, "settings", "Settings", settingsData{Gateway: g}, flashFromQuery(r))
+}
+
+// ---- change password ----
+
+type changePasswordData struct {
+	MustChange bool
+	Error      string
+}
+
+func (s *Server) getChangePassword(w http.ResponseWriter, r *http.Request) {
+	sess := sessionFromCtx(r.Context())
+	must := sess != nil && sess.MustChangePassword
+	s.render(w, r, "change_password", "Change password", changePasswordData{MustChange: must}, flashFromQuery(r))
+}
+
+func (s *Server) postChangePassword(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	sess := sessionFromCtx(ctx)
+	if sess == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	newPW := r.PostFormValue("password")
+	confirm := r.PostFormValue("confirm")
+	if newPW != confirm {
+		s.render(w, r, "change_password", "Change password",
+			changePasswordData{MustChange: sess.MustChangePassword, Error: "passwords do not match"}, nil)
+		return
+	}
+	if err := s.Deps.Auth.ChangePassword(ctx, sess.UserID, newPW, s.Deps.CredentialsPath); err != nil {
+		s.render(w, r, "change_password", "Change password",
+			changePasswordData{MustChange: sess.MustChangePassword, Error: err.Error()}, nil)
+		return
+	}
+	_ = s.Deps.DB.AuditWrite(ctx, currentActor(r), "settings.password-change", "", "{}")
+	http.Redirect(w, r, "/?flash=ok:password+changed", http.StatusSeeOther)
 }
 
 func (s *Server) postSettings(w http.ResponseWriter, r *http.Request) {

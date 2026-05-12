@@ -7,10 +7,19 @@
 
     {{if .Data.Error}}<div class="mb-3 text-sm text-red-300">{{.Data.Error}}</div>{{end}}
 
+    {{if .Data.DefaultPass}}
+    <div class="mb-4 bg-amber-950 border border-amber-700 rounded p-3 text-xs">
+        <div class="text-amber-300 font-semibold mb-1">Default credentials (change after login)</div>
+        <div class="font-mono text-amber-200">username: <span class="select-all">{{.Data.DefaultUser}}</span></div>
+        <div class="font-mono text-amber-200">password: <span class="select-all">{{.Data.DefaultPass}}</span></div>
+    </div>
+    {{end}}
+
     <form method="POST" action="/login" class="space-y-3">
         <div>
             <label class="block text-xs text-slate-400 mb-1">Username</label>
             <input name="username" autocomplete="username" required
+                   value="{{.Data.DefaultUser}}"
                    class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm">
         </div>
         <div>

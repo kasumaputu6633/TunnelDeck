@@ -3,6 +3,7 @@ package httpsrv
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/kasumaputu6633/tunneldeck/internal/auth"
 )
@@ -40,8 +41,26 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 	})
 }
 
-// csrfMW enforces CSRF on every non-GET request. Forms submit the token in
-// the "csrf" field; HTMX requests may use the X-CSRF-Token header.
+// mustChangePasswordMW redirects to /settings/password when the session
+// has MustChangePassword=true. Exempts the change-password page itself,
+// logout, and static assets so the user can actually complete the flow.
+func (s *Server) mustChangePasswordMW(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sess := sessionFromCtx(r.Context())
+		if sess == nil || !sess.MustChangePassword {
+			next.ServeHTTP(w, r)
+			return
+		}
+		exempt := r.URL.Path == "/settings/password" ||
+			r.URL.Path == "/logout" ||
+			strings.HasPrefix(r.URL.Path, "/static/")
+		if exempt {
+			next.ServeHTTP(w, r)
+			return
+		}
+		http.Redirect(w, r, "/settings/password", http.StatusSeeOther)
+	})
+}
 func (s *Server) csrfMW(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet || r.Method == http.MethodHead {

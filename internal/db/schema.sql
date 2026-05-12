@@ -65,11 +65,12 @@ CREATE TABLE IF NOT EXISTS join_tokens (
 );
 
 CREATE TABLE IF NOT EXISTS users (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    username    TEXT    NOT NULL UNIQUE,
-    pwhash      TEXT    NOT NULL,
-    created_at  INTEGER NOT NULL,
-    last_login  INTEGER
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    username            TEXT    NOT NULL UNIQUE,
+    pwhash              TEXT    NOT NULL,
+    must_change_password INTEGER NOT NULL DEFAULT 1,
+    created_at          INTEGER NOT NULL,
+    last_login          INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
